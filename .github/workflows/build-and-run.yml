@@ -1,0 +1,23 @@
+name: Build and run
+
+on: [push, pull_request]
+
+jobs:
+  build-and-run:
+
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .testing
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Compile executable
+      run: |
+        autoreconf -if
+        ./configure
+        make
+
+    - name: Run executable
+      run: ./remap
