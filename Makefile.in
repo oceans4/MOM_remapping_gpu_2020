@@ -12,9 +12,10 @@ all: remap
 
 # Dependencies
 
-remap: MOM_remapping.o MOM_error_handler.o regrid_edge_values.o \
+remap: driver.o MOM_remapping.o MOM_error_handler.o regrid_edge_values.o \
 	PLM_functions.o regrid_solvers.o polynomial_functions.o
 
+driver.o: MOM_remapping.o
 MOM_remapping.o: MOM_error_handler.o regrid_edge_values.o PLM_functions.o
 regrid_edge_values.o: MOM_error_handler.o regrid_solvers.o polynomial_functions.o
 PLM_functions.o: MOM_error_handler.o
