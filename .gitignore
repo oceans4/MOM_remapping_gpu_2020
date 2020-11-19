@@ -1,0 +1,16 @@
+# Autoconf output
+/aclocal.m4
+/autom4te.cache
+/configure
+
+# Configure output
+autom4te.cache/
+config.log
+config.status
+configure
+Makefile
+
+# Makefile output
+*.o
+*.mod
+remap

@@ -1,0 +1,47 @@
+FC = @FC@
+LD = @FC@
+FCFLAGS = @FCFLAGS@
+LDFLAGFS= @LDFLAGS@
+
+
+# Macros
+.PHONY: all
+
+all: remap
+
+
+# Dependencies
+
+remap: MOM_remapping.o MOM_error_handler.o regrid_edge_values.o \
+	PLM_functions.o regrid_solvers.o polynomial_functions.o
+
+MOM_remapping.o: MOM_error_handler.o regrid_edge_values.o PLM_functions.o
+regrid_edge_values.o: MOM_error_handler.o regrid_solvers.o polynomial_functions.o
+PLM_functions.o: MOM_error_handler.o
+regrid_solvers.o: MOM_error_handler.o
+
+
+# Rules
+
+remap:
+	$(LD) $(LDFLAGS) -o $@ $^
+
+%.o: @srcdir@/src/%.F90
+	$(FC) $(FCFLAGS) -c $<
+
+
+# Cleanup
+.PHONY: clean distclean ac-clean
+
+clean:
+	rm -f remap *.o *.mod
+
+distclean: clean
+	rm -f config.log
+	rm -f config.status
+	rm -f Makefile
+
+ac-clean: distclean
+	rm -f @srcdir@/aclocal.m4
+	rm -rf @srcdir@/autom4te.cache
+	rm -f @srcdir@/configure
