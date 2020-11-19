@@ -7,15 +7,17 @@ LDFLAGFS= @LDFLAGS@
 # Macros
 .PHONY: all
 
-all: remap
+all: remap unit_tests
 
 
 # Dependencies
 
-remap: driver.o MOM_remapping.o MOM_error_handler.o regrid_edge_values.o \
-	PLM_functions.o regrid_solvers.o polynomial_functions.o
+COMMON_OBS = MOM_remapping.o MOM_error_handler.o regrid_edge_values.o \
+	     PLM_functions.o regrid_solvers.o polynomial_functions.o
+remap: driver.o $(COMMON_OBS)
+unit_tests: unit_tests.o $(COMMON_OBS)
 
-driver.o: MOM_remapping.o
+driver.o unit_tests.o: MOM_remapping.o
 MOM_remapping.o: MOM_error_handler.o regrid_edge_values.o PLM_functions.o
 regrid_edge_values.o: MOM_error_handler.o regrid_solvers.o polynomial_functions.o
 PLM_functions.o: MOM_error_handler.o
@@ -24,7 +26,7 @@ regrid_solvers.o: MOM_error_handler.o
 
 # Rules
 
-remap:
+remap unit_tests:
 	$(LD) $(LDFLAGS) -o $@ $^
 
 %.o: @srcdir@/src/%.F90
@@ -35,7 +37,7 @@ remap:
 .PHONY: clean distclean ac-clean
 
 clean:
-	rm -f remap *.o *.mod
+	rm -f remap unit_tests *.o *.mod
 
 distclean: clean
 	rm -f config.log

@@ -16,5 +16,8 @@ jobs:
         ./configure
         make
 
+    - name: Unit tests
+      run: ./unit_tests
+
     - name: Run executable
       run: ./remap
