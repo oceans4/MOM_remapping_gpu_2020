@@ -7,6 +7,9 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    env:
+      FCFLAGS: "-g -O2 --coverage"
+
     steps:
     - uses: actions/checkout@v2
 
@@ -18,3 +21,6 @@ jobs:
 
     - name: Run executable
       run: ./remap
+
+    - name: Report coverage
+      run: bash <(curl -s https://codecov.io/bash)
