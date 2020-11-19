@@ -1663,21 +1663,33 @@ end module MOM_remapping
 
 program main
   use MOM_remapping
-  logical :: verbose=.true. !< If true, write results to stdout
+  logical :: verbose=.false. !< If true, write results to stdout
   ! Local variables
-  integer, parameter :: n0 = 4, n1 = 3, n2 = 6
-  real :: h0(n0), x0(n0+1), u0(n0)
-  real :: h1(n1), x1(n1+1), u1(n1), hn1(n1), dx1(n1+1)
-  real :: h2(n2), x2(n2+1), u2(n2), hn2(n2), dx2(n2+1)
-  data u0 /9., 3., -3., -9./   ! Linear profile, 4 at surface to -4 at bottom
-  data h0 /4*0.75/ ! 4 uniform layers with total depth of 3
-  data h1 /3*1./   ! 3 uniform layers with total depth of 3
-  data h2 /6*0.5/  ! 6 uniform layers with total depth of 3
+  integer, parameter :: imax=10000000
+  integer, parameter :: n0 = 4, n1 = 3
+  real :: h0(imax,n0), x0(imax,n0+1), u0(imax,n0)
+  real :: h1(imax,n1), x1(imax,n1+1), u1(imax,n1), dx1(imax,n1+1)
+!  data u0 /9., 3., -3., -9./   ! Linear profile, 4 at surface to -4 at bottom
+!  data h0 /4*0.75/ ! 4 uniform layers with total depth of 3
+!  data h1 /3*1./   ! 3 uniform layers with total depth of 3
   type(remapping_CS) :: CS !< Remapping control structure
   logical :: answers_2018 !  If true use older, less acccurate expressions.
-  integer :: i
+  integer :: i,k
   real :: err, h_neglect, h_neglect_edge
   logical :: thisTest, v
+  real :: a,H
+  a=9.
+  H=3.
+  !Initialize arrays with test data
+  do i=1,imax
+     do k=1,n0
+        u0(i,k)=a-(k-1)*2*a/(n0-1)
+        h0(i,k)=H/n0
+     enddo
+     do k=1,n1
+        h1(i,k)=H/n1
+     enddo
+  enddo
 
   v = verbose
   answers_2018 = .false. ! .true.
@@ -1685,17 +1697,22 @@ program main
   h_neglect_edge = hNeglect_dflt ; if (answers_2018) h_neglect_edge = 1.0e-10
   write(*,*) '==== MOM_remapping: remapping_unit_tests_gpu ================='
   thisTest = .false.
+  call cpu_time(cptim1)
   call initialize_remapping(CS, 'PPM_H4', answers_2018=answers_2018)
-  if (verbose) write(*,*) 'h0 (test data)'
-  if (verbose) call dumpGrid(n0,h0,x0,u0)
-  call dzFromH1H2( n0, h0, n1, h1, dx1 )
-  call remapping_core_w( CS, n0, h0, u0, n1, dx1, u1, h_neglect, h_neglect_edge)
-  do i=1,n1
-    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
-    if (abs(err)>real(n1-1)*epsilon(err)) thisTest = .true.
+  do i=1,imax
+    if (verbose) write(*,*) 'h0 (test data)'
+    if (verbose) call dumpGrid(n0,h0(i,:),x0(i,:),u0(i,:))
+    call dzFromH1H2( n0, h0(i,:), n1, h1(i,:), dx1(i,:) )
+    call remapping_core_w( CS, n0, h0(i,:), u0(i,:), n1, dx1(i,:), u1(i,:), h_neglect, h_neglect_edge)
+    do k=1,n1
+       err=u1(i,k)-8.*(0.5*real(1+n1)-real(k))
+       if (abs(err)>real(n1-1)*epsilon(err)) thisTest = .true.
+    enddo
+    if (verbose) write(*,*) 'h1 (by projection)'
+    if (verbose) call dumpGrid(n1,h1(i,:),x1(i,:),u1(i,:))
   enddo
-  if (verbose) write(*,*) 'h1 (by projection)'
-  if (verbose) call dumpGrid(n1,h1,x1,u1)
-  if (thisTest) write(*,*) 'remapping_unit_tests_gpu: Failed remapping_core_w()'
+  call cpu_time(cptim2)
+  print '(''time taken '',f8.3)', (cptim2 - cptim1)
+  if (thisTest) write(*,*) 'remapping_unit_tests_gpu: Failed remapping_core_w() with error: ',err
 end program
 
