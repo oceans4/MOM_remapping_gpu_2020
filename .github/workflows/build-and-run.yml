@@ -9,6 +9,7 @@ jobs:
 
     env:
       FCFLAGS: "-g -O2 --coverage"
+      LDFLAGS: "--coverage"
 
     steps:
     - uses: actions/checkout@v2
