@@ -7,17 +7,15 @@ LDFLAGFS= @LDFLAGS@
 # Macros
 .PHONY: all
 
-all: prg_remap prg_unit_tests
+all: prg_unit_tests prg_remap prg_remap2
 
 
 # Dependencies
 
 COMMON_OBS = MOM_remapping.o MOM_error_handler.o  MOM_string_functions.o \
              regrid_edge_values.o PLM_functions.o regrid_solvers.o polynomial_functions.o
-prg_remap: prg_remap.o $(COMMON_OBS)
-prg_unit_tests: prg_unit_tests.o $(COMMON_OBS)
 
-prg_remap.o prg_unit_tests.o: MOM_remapping.o
+prg_%.o: MOM_remapping.o
 MOM_remapping.o: MOM_error_handler.o regrid_edge_values.o PLM_functions.o MOM_string_functions.o
 regrid_edge_values.o: MOM_error_handler.o regrid_solvers.o polynomial_functions.o
 PLM_functions.o: MOM_error_handler.o
@@ -26,7 +24,7 @@ regrid_solvers.o: MOM_error_handler.o
 
 # Rules
 
-prg_remap prg_unit_tests:
+prg_%: prg_%.o $(COMMON_OBS)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 %.o: @srcdir@/src/%.F90

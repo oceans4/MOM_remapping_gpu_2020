@@ -14,3 +14,4 @@ Makefile
 *.o
 *.mod
 prg_*
+!src/prg_*
