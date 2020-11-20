@@ -7,6 +7,10 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    env:
+      FCFLAGS: "-g -O2 --coverage"
+      LDFLAGS: "--coverage"
+
     steps:
     - uses: actions/checkout@v2
 
@@ -16,5 +20,11 @@ jobs:
         ./configure
         make
 
+    - name: Unit tests
+      run: ./unit_tests
+
     - name: Run executable
       run: ./remap
+
+    - name: Report coverage
+      run: bash <(curl -s https://codecov.io/bash)
