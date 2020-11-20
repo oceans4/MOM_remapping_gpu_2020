@@ -1,4 +1,4 @@
-program main
+program remap
   use MOM_remapping, only : remapping_CS
   use MOM_remapping, only : initialize_remapping
   use MOM_remapping, only : dzFromH1H2
@@ -56,4 +56,3 @@ program main
   print '(''time taken '',f8.3)', (cptim2 - cptim1)
   if (thisTest) write(*,*) 'remapping_unit_tests_gpu: Failed remapping_core_w() with error: ',err
 end program
-

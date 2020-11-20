@@ -14,3 +14,9 @@ $ cd build
 $ FC=(...) FCFLAGS=(...) ../configure
 $ make
 ```
+
+Tests:
+```
+./remap
+./unit_tests
+```
