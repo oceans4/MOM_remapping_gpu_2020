@@ -13,5 +13,5 @@ Makefile
 # Makefile output
 *.o
 *.mod
-remap
-unit_tests
+prg_*
+!src/prg_*

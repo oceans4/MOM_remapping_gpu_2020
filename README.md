@@ -17,6 +17,6 @@ $ make
 
 Tests:
 ```
-./remap
-./unit_tests
+./prg_remap
+./prg_unit_tests
 ```
