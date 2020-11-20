@@ -5,6 +5,7 @@ module MOM_remapping
 ! Original module written by Laurent White, 2008.06.09
 
 use MOM_error_handler, only : MOM_error, FATAL
+use MOM_string_functions, only : uppercase
 use regrid_edge_values, only : edge_values_explicit_h4, edge_values_implicit_h4
 use regrid_edge_values, only : edge_values_implicit_h4, edge_values_implicit_h6
 use regrid_edge_values, only : edge_slopes_implicit_h3, edge_slopes_implicit_h5
@@ -1028,11 +1029,11 @@ real function average_value_ppoly( n0, u0, ppoly0_E, ppoly0_coefs, method, i0, x
 end function average_value_ppoly
 
 !> Measure totals and bounds on source grid
-subroutine measure_input_bounds( n0, h0, u0, ppoly_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
+subroutine measure_input_bounds( n0, h0, u0, edge_values, h0tot, h0err, u0tot, u0err, u0min, u0max )
   integer,               intent(in)  :: n0 !< Number of cells on source grid
   real, dimension(n0),   intent(in)  :: h0 !< Cell widths on source grid
   real, dimension(n0),   intent(in)  :: u0 !< Cell averages on source grid
-  real, dimension(n0,2), intent(in)  :: ppoly_E !< Cell edge values on source grid
+  real, dimension(n0,2), intent(in)  :: edge_values !< Cell edge values on source grid
   real,                  intent(out) :: h0tot !< Sum of cell widths
   real,                  intent(out) :: h0err !< Magnitude of round-off error in h0tot
   real,                  intent(out) :: u0tot !< Sum of cell widths times values
@@ -1048,15 +1049,15 @@ subroutine measure_input_bounds( n0, h0, u0, ppoly_E, h0tot, h0err, u0tot, u0err
   h0err = 0.
   u0tot = h0(1) * u0(1)
   u0err = 0.
-  u0min = min( ppoly_E(1,1), ppoly_E(1,2) )
-  u0max = max( ppoly_E(1,1), ppoly_E(1,2) )
+  u0min = min( edge_values(1,1), edge_values(1,2) )
+  u0max = max( edge_values(1,1), edge_values(1,2) )
   do k = 2, n0
     h0tot = h0tot + h0(k)
     h0err = h0err + eps * max(h0tot, h0(k))
     u0tot = u0tot + h0(k) * u0(k)
     u0err = u0err + eps * max(abs(u0tot), abs(h0(k) * u0(k)))
-    u0min = min( u0min, ppoly_E(k,1), ppoly_E(k,2) )
-    u0max = max( u0max, ppoly_E(k,1), ppoly_E(k,2) )
+    u0min = min( u0min, edge_values(k,1), edge_values(k,2) )
+    u0max = max( u0max, edge_values(k,1), edge_values(k,2) )
   enddo
 
 end subroutine measure_input_bounds
@@ -1681,6 +1682,67 @@ logical function remapping_unit_tests(verbose)
   ppoly0_S(:,:) = 0.0
   ppoly0_coefs(:,:) = 0.0
 
+  do i=1,n1
+    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByProjection()'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  thisTest = .false.
+  u1(:) = 0.
+  call remapByDeltaZ( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                      n1, x1-x0(1:n1+1), &
+                      INTEGRATION_PPM, u1, hn1, h_neglect )
+  if (verbose) write(*,*) 'h1 (by delta)'
+  if (verbose) call dumpGrid(n1,h1,x1,u1)
+  hn1=hn1-h1
+  do i=1,n1
+    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 1'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  thisTest = .false.
+  call buildGridFromH(n2, h2, x2)
+  dx2(1:n0+1) = x2(1:n0+1) - x0
+  dx2(n0+2:n2+1) = x2(n0+2:n2+1) - x0(n0+1)
+  call remapByDeltaZ( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                      n2, dx2, &
+                      INTEGRATION_PPM, u2, hn2, h_neglect )
+  if (verbose) write(*,*) 'h2'
+  if (verbose) call dumpGrid(n2,h2,x2,u2)
+  if (verbose) write(*,*) 'hn2'
+  if (verbose) call dumpGrid(n2,hn2,x2,u2)
+
+  do i=1,n2
+    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 2'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  if (verbose) write(*,*) 'Via sub-cells'
+  thisTest = .false.
+  call remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                            n2, h2, INTEGRATION_PPM, .false., u2, err )
+  if (verbose) call dumpGrid(n2,h2,x2,u2)
+
+  do i=1,n2
+    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remap_via_sub_cells() 2'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  call remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                            6, (/.125,.125,.125,.125,.125,.125/), INTEGRATION_PPM, .false., u2, err )
+  if (verbose) call dumpGrid(6,h2,x2,u2)
+
+  call remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                            3, (/2.25,1.5,1./), INTEGRATION_PPM, .false., u2, err )
+  if (verbose) call dumpGrid(3,h2,x2,u2)
 
   if (.not. remapping_unit_tests) write(*,*) 'Pass'
 
