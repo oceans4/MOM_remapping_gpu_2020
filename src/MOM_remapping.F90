@@ -1689,53 +1689,6 @@ logical function remapping_unit_tests(verbose)
   if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByProjection()'
   remapping_unit_tests = remapping_unit_tests .or. thisTest
 
-  thisTest = .false.
-  u1(:) = 0.
-  call remapByDeltaZ( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
-                      n1, x1-x0(1:n1+1), &
-                      INTEGRATION_PPM, u1, hn1, h_neglect )
-  if (verbose) write(*,*) 'h1 (by delta)'
-  if (verbose) call dumpGrid(n1,h1,x1,u1)
-  hn1=hn1-h1
-  do i=1,n1
-    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
-    if (abs(err)>2.*epsilon(err)) thisTest = .true.
-  enddo
-  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 1'
-  remapping_unit_tests = remapping_unit_tests .or. thisTest
-
-  thisTest = .false.
-  call buildGridFromH(n2, h2, x2)
-  dx2(1:n0+1) = x2(1:n0+1) - x0
-  dx2(n0+2:n2+1) = x2(n0+2:n2+1) - x0(n0+1)
-  call remapByDeltaZ( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
-                      n2, dx2, &
-                      INTEGRATION_PPM, u2, hn2, h_neglect )
-  if (verbose) write(*,*) 'h2'
-  if (verbose) call dumpGrid(n2,h2,x2,u2)
-  if (verbose) write(*,*) 'hn2'
-  if (verbose) call dumpGrid(n2,hn2,x2,u2)
-
-  do i=1,n2
-    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
-    if (abs(err)>2.*epsilon(err)) thisTest = .true.
-  enddo
-  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 2'
-  remapping_unit_tests = remapping_unit_tests .or. thisTest
-
-  if (verbose) write(*,*) 'Via sub-cells'
-  thisTest = .false.
-  call remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
-                            n2, h2, INTEGRATION_PPM, .false., u2, err )
-  if (verbose) call dumpGrid(n2,h2,x2,u2)
-
-  do i=1,n2
-    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
-    if (abs(err)>2.*epsilon(err)) thisTest = .true.
-  enddo
-  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remap_via_sub_cells() 2'
-  remapping_unit_tests = remapping_unit_tests .or. thisTest
-
   call remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
                             6, (/.125,.125,.125,.125,.125,.125/), INTEGRATION_PPM, .false., u2, err )
   if (verbose) call dumpGrid(6,h2,x2,u2)
