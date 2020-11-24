@@ -9,17 +9,18 @@ program test_remap_4lvl
   ! Local variables
   integer, parameter :: imax=10000000
   integer, parameter :: n0 = 4, n1 = 3
-  real :: h0(imax,n0), x0(imax,n0+1), u0(imax,n0)
-  real :: h1(imax,n1), x1(imax,n1+1), u1(imax,n1), dx1(imax,n1+1)
-!  data u0 /9., 3., -3., -9./   ! Linear profile, 4 at surface to -4 at bottom
-!  data h0 /4*0.75/ ! 4 uniform layers with total depth of 3
-!  data h1 /3*1./   ! 3 uniform layers with total depth of 3
+  real, allocatable :: h0(:,:), x0(:,:), u0(:,:)
+  real, allocatable :: h1(:,:), x1(:,:), u1(:,:), dx1(:,:)
   type(remapping_CS) :: CS !< Remapping control structure
   logical :: answers_2018 !  If true use older, less acccurate expressions.
   integer :: i,k
   real :: err, h_neglect, h_neglect_edge
   logical :: thisTest, v
   real :: a,H
+
+  allocate(h0(imax,n0), x0(imax,n0+1), u0(imax,n0))
+  allocate(h1(imax,n1), x1(imax,n1+1), u1(imax,n1), dx1(imax,n1+1))
+
   a=9.
   H=3.
   !Initialize arrays with test data
