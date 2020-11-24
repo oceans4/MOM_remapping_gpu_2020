@@ -77,6 +77,9 @@ real elemental pure function PLM_slope_cw(h_l, h_c, h_r, h_neglect, u_l, u_c, u_
                                     ! differences across the cell [units of u]
   real :: u_min, u_max ! Minimum and maximum value across cell [units of u]
   real :: h_cn ! Thickness of center cell [units of grid thickness]
+  real :: r_h3 ! Reciprocal of sum of thicknesses [H-1]
+  real :: r_hr ! Reciprocal of sum of two right thicknesses [H-1]
+  real :: r_hl ! Reciprocal of sum of two right thicknesses [H-1]
 
   h_cn = h_c + h_neglect
 
@@ -88,32 +91,29 @@ real elemental pure function PLM_slope_cw(h_l, h_c, h_r, h_neglect, u_l, u_c, u_
   ! Piecewise Parabolic Method, Colella and Woodward (1984),
   ! http://dx.doi.org/10.1016/0021-991(84)90143-8.
   ! For uniform resolution it simplifies to ( u_r - u_l )/2 .
-  sigma_c = ( h_c / ( h_cn + ( h_l + h_r ) ) ) * ( &
-                ( 2.*h_l + h_c ) / ( h_r + h_cn ) * sigma_r &
-              + ( 2.*h_r + h_c ) / ( h_l + h_cn ) * sigma_l )
+  r_h3 = 1. / ( h_cn + ( h_l + h_r ) )
+  r_hr = 1. / ( h_r + h_cn )
+  r_hl = 1. / ( h_l + h_cn )
+  sigma_c = ( h_c * r_h3 ) * ( &
+                ( ( 2.*h_l + h_c ) * r_hr ) * sigma_r &
+              + ( ( 2.*h_r + h_c ) * r_hl ) * sigma_l )
 
   ! Limit slope so that reconstructions are bounded by neighbors
   u_min = min( u_l, u_c, u_r )
   u_max = max( u_l, u_c, u_r )
-  if ( (sigma_l * sigma_r) > 0.0 ) then
-    ! This limits the slope so that the edge values are bounded by the
-    ! two cell averages spanning the edge.
-    PLM_slope_cw = sign( min( abs(sigma_c), 2.*min( u_c - u_min, u_max - u_c ) ), sigma_c )
-  else
-    ! Extrema in the mean values require a PCM reconstruction avoid generating
-    ! larger extreme values.
-    PLM_slope_cw = 0.0
-  endif
+  ! This limits the slope so that the edge values are bounded by the
+  ! two cell averages spanning the edge.
+  PLM_slope_cw = sign( min( abs(sigma_c), 2.*min( u_c - u_min, u_max - u_c ) ), sigma_c )
 
   ! This block tests to see if roundoff causes edge values to be out of bounds
-  if (u_c - 0.5*abs(PLM_slope_cw) < u_min .or.  u_c + 0.5*abs(PLM_slope_cw) > u_max) then
-    PLM_slope_cw = PLM_slope_cw * ( 1. - epsilon(PLM_slope_cw) )
-  endif
+  !! if (u_c - 0.5*abs(PLM_slope_cw) < u_min .or.  u_c + 0.5*abs(PLM_slope_cw) > u_max) then
+  !!   PLM_slope_cw = PLM_slope_cw * ( 1. - epsilon(PLM_slope_cw) )
+  !! endif
 
   ! An attempt to avoid inconsistency when the values become unrepresentable.
   ! ### The following 1.E-140 is dimensionally inconsistent. A newer version of
   ! PLM is progress that will avoid the need for such rounding.
-  if (abs(PLM_slope_cw) < 1.E-140) PLM_slope_cw = 0.
+  !! if (abs(PLM_slope_cw) < 1.E-140) PLM_slope_cw = 0.
 
 end function PLM_slope_cw
 
@@ -183,7 +183,7 @@ end function PLM_extrapolate_slope
 !!
 !! It is assumed that the size of the array 'u' is equal to the number of cells
 !! defining 'grid' and 'ppoly'. No consistency check is performed here.
-subroutine PLM_reconstruction( N, h, u, edge_values, ppoly_coef, h_neglect )
+subroutine PLM_reconstruction( N, h, u, edge_values, ppoly_coef, h_neglect, CW84 )
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: h !< cell widths (size N)
   real, dimension(:),   intent(in)    :: u !< cell averages (size N)
@@ -194,7 +194,8 @@ subroutine PLM_reconstruction( N, h, u, edge_values, ppoly_coef, h_neglect )
   real,       optional, intent(in)    :: h_neglect !< A negligibly small width for
                                            !! the purpose of cell reconstructions
                                            !! in the same units as h
-
+  logical,    optional, intent(in)    :: CW84 !< If true, use the Colella and Woodward, 1984,
+                                           !! slope limiter
   ! Local variables
   integer       :: k                    ! loop index
   real          :: u_l, u_c, u_r        ! left, center and right cell averages
@@ -205,15 +206,24 @@ subroutine PLM_reconstruction( N, h, u, edge_values, ppoly_coef, h_neglect )
   real          :: almost_one
   real, dimension(N) :: slp, mslp
   real    :: hNeglect
+  logical :: use_CW84, use_WA08 ! For selecting WA08 or CW84 limiters
 
   hNeglect = hNeglect_dflt ; if (present(h_neglect)) hNeglect = h_neglect
+  use_CW84 = .false. ; if (present(CW84)) use_CW84 = CW84
+  use_WA08 = .not. use_CW84
 
   almost_one = 1. - epsilon(slope)
 
-  ! Loop on interior cells
-  do k = 2,N-1
-    slp(k) = PLM_slope_wa(h(k-1), h(k), h(k+1), hNeglect, u(k-1), u(k), u(k+1))
-  enddo ! end loop on interior cells
+  ! Loop over interior cells
+  if (use_WA08) then
+    do k = 2,N-1
+      slp(k) = PLM_slope_wa(h(k-1), h(k), h(k+1), hNeglect, u(k-1), u(k), u(k+1))
+    enddo ! end loop on interior cells
+  elseif (use_CW84) then
+    do k = 2,N-1
+      slp(k) = PLM_slope_cw(h(k-1), h(k), h(k+1), hNeglect, u(k-1), u(k), u(k+1))
+    enddo ! end loop on interior cells
+  endif
 
   ! Boundary cells use PCM. Extrapolation is handled after monotonization.
   slp(1) = 0.
