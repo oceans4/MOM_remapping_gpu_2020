@@ -64,7 +64,7 @@ program test_remap_70lvl
   call cpu_time(cptim2)
   print '(''PLM time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
 
-  ! Remap using PPM
+  ! Remap using PPM with explicit edge values
   call remapping_set_param(CS, remapping_scheme='PPM_H4')
   call cpu_time(cptim1)
   do i=1,imax
@@ -73,13 +73,31 @@ program test_remap_70lvl
   call cpu_time(cptim2)
   print '(''PPM_H4 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
 
-  ! Remap using PQM
+  ! Remap using PPM with implicit edge values
+  call remapping_set_param(CS, remapping_scheme='PPM_IH4')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PPM_IH4 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
+  ! Remap using PQM with IH4-IH3
   call remapping_set_param(CS, remapping_scheme='PQM_IH4IH3')
   call cpu_time(cptim1)
   do i=1,imax
     call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
   enddo
   call cpu_time(cptim2)
-  print '(''PPM_IH4IH3 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+  print '(''PQM_IH4IH3 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
+  ! Remap using PQM with IH6-IH5
+  call remapping_set_param(CS, remapping_scheme='PQM_IH6IH5')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PQM_IH6IH5 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
 
 end program
