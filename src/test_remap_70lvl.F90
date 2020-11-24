@@ -3,8 +3,9 @@ program test_remap_70lvl
   use MOM_remapping, only : remapping_CS
   use MOM_remapping, only : initialize_remapping
   use MOM_remapping, only : remapping_core_h
+  use MOM_remapping, only : remapping_set_param
 
-  integer, parameter :: imax=10000 ! Number of columns
+  integer, parameter :: imax=100000 ! Number of columns
   integer, parameter :: n0 = 70 ! Number of layers in source grid
   integer, parameter :: n1 = 35 ! Number of layers in target grid
   real :: h0(imax,n0) ! Source grid 
@@ -45,13 +46,22 @@ program test_remap_70lvl
     enddo
   enddo
 
-  ! Do the remapping
+  ! Remap using PLM
   call initialize_remapping(CS, 'PLM', answers_2018=.false.)
   call cpu_time(cptim1)
   do i=1,imax
     call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
   enddo
   call cpu_time(cptim2)
-  print '(''time taken '',f8.3)', (cptim2 - cptim1)
+  print '(''PLM time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
+  ! Remap using PPM
+  call remapping_set_param(CS, remapping_scheme='PPM_H4')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PPM_H4 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
 
 end program
