@@ -15,7 +15,7 @@ all: prg_unit_tests prg_remap prg_remap2
 COMMON_OBS = MOM_remapping.o MOM_error_handler.o  MOM_string_functions.o \
              regrid_edge_values.o PLM_functions.o regrid_solvers.o polynomial_functions.o
 
-prg_%.o: MOM_remapping.o
+prg_unit_tests.o prg_remap.o prg_remap2.o: $(COMMON_OBS)
 MOM_remapping.o: MOM_error_handler.o regrid_edge_values.o PLM_functions.o MOM_string_functions.o
 regrid_edge_values.o: MOM_error_handler.o regrid_solvers.o polynomial_functions.o
 PLM_functions.o: MOM_error_handler.o
