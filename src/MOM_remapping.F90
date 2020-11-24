@@ -9,7 +9,7 @@ use MOM_string_functions, only : uppercase
 use regrid_edge_values, only : edge_values_explicit_h4, edge_values_implicit_h4
 use regrid_edge_values, only : edge_values_implicit_h4, edge_values_implicit_h6
 use regrid_edge_values, only : edge_slopes_implicit_h3, edge_slopes_implicit_h5
-!use PCM_functions, only : PCM_reconstruction
+use PCM_functions, only : PCM_reconstruction
 use PLM_functions, only : PLM_reconstruction, PLM_boundary_extrapolation
 use PPM_functions, only : PPM_reconstruction, PPM_boundary_extrapolation
 !use PQM_functions, only : PQM_reconstruction, PQM_boundary_extrapolation_v1
@@ -392,9 +392,9 @@ subroutine build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, &
     local_remapping_scheme = min( local_remapping_scheme, REMAPPING_PPM_H4 )
   endif
   select case ( local_remapping_scheme )
-!    case ( REMAPPING_PCM )
-!      call PCM_reconstruction( n0, u0, ppoly_r_E, ppoly_r_coefs)
-!      iMethod = INTEGRATION_PCM
+    case ( REMAPPING_PCM )
+      call PCM_reconstruction( n0, u0, ppoly_r_E, ppoly_r_coefs)
+      iMethod = INTEGRATION_PCM
     case ( REMAPPING_PLM )
       call PLM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect )
       if ( CS%boundary_extrapolation ) then
@@ -1577,9 +1577,9 @@ subroutine setReconstructionType(string,CS)
   integer :: degree
   degree = -99
   select case ( uppercase(trim(string)) )
-!    case ("PCM")
-!      CS%remapping_scheme = REMAPPING_PCM
-!      degree = 0
+    case ("PCM")
+      CS%remapping_scheme = REMAPPING_PCM
+      degree = 0
     case ("PLM")
       CS%remapping_scheme = REMAPPING_PLM
       degree = 1
@@ -1758,6 +1758,15 @@ logical function remapping_unit_tests(verbose)
   allocate(ppoly0_coefs(5,6))
   allocate(ppoly0_E(5,2))
   allocate(ppoly0_S(5,2))
+
+  call PCM_reconstruction(3, (/1.,2.,4./), ppoly0_E(1:3,:), &
+                          ppoly0_coefs(1:3,:) )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, ppoly0_E(:,1), (/1.,2.,4./), 'PCM: left edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, ppoly0_E(:,2), (/1.,2.,4./), 'PCM: right edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, ppoly0_coefs(:,1), (/1.,2.,4./), 'PCM: P0')
 
   call PLM_reconstruction(3, (/1.,1.,1./), (/1.,3.,5./), ppoly0_E(1:3,:), &
                           ppoly0_coefs(1:3,:), h_neglect )

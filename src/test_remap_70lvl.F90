@@ -46,8 +46,17 @@ program test_remap_70lvl
     enddo
   enddo
 
+  ! Remap using PCM
+  call initialize_remapping(CS, 'PCM', answers_2018=.false.)
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PCM time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
   ! Remap using PLM
-  call initialize_remapping(CS, 'PLM', answers_2018=.false.)
+  call remapping_set_param(CS, remapping_scheme='PLM')
   call cpu_time(cptim1)
   do i=1,imax
     call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
