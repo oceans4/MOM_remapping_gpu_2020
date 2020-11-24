@@ -13,5 +13,5 @@ Makefile
 # Makefile output
 *.o
 *.mod
-prg_*
-!src/prg_*
+test_*
+!src/test_*

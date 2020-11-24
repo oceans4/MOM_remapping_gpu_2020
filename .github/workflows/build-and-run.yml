@@ -21,13 +21,13 @@ jobs:
         make
 
     - name: Unit tests
-      run: ./prg_unit_tests
+      run: ./test_units
 
     - name: Run first executable
-      run: ./prg_remap
+      run: ./test_remap_4lvl
 
     - name: Run second executable
-      run: ./prg_remap2
+      run: ./test_remap_70lvl
 
     - name: Report coverage
       run: bash <(curl -s https://codecov.io/bash)
