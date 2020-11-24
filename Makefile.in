@@ -7,7 +7,7 @@ LDFLAGS = @LDFLAGS@
 # Macros
 .PHONY: all
 
-all: prg_unit_tests prg_remap prg_remap2
+all: test_units test_remap_4lvl test_remap_70lvl
 
 
 # Dependencies
@@ -15,7 +15,7 @@ all: prg_unit_tests prg_remap prg_remap2
 COMMON_OBS = MOM_remapping.o MOM_error_handler.o  MOM_string_functions.o \
              regrid_edge_values.o PLM_functions.o regrid_solvers.o polynomial_functions.o
 
-prg_unit_tests.o prg_remap.o prg_remap2.o: $(COMMON_OBS)
+test_units.o test_remap_4lvl.o test_remap_70lvl.o: $(COMMON_OBS)
 MOM_remapping.o: MOM_error_handler.o regrid_edge_values.o PLM_functions.o MOM_string_functions.o
 regrid_edge_values.o: MOM_error_handler.o regrid_solvers.o polynomial_functions.o
 PLM_functions.o: MOM_error_handler.o
@@ -24,7 +24,7 @@ regrid_solvers.o: MOM_error_handler.o
 
 # Rules
 
-prg_%: prg_%.o $(COMMON_OBS)
+test_%: test_%.o $(COMMON_OBS)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 %.o: @srcdir@/src/%.F90
@@ -35,7 +35,7 @@ prg_%: prg_%.o $(COMMON_OBS)
 .PHONY: clean distclean ac-clean
 
 clean:
-	rm -f prg_* *.o *.mod
+	rm -f test_* *.o *.mod
 
 distclean: clean
 	rm -f config.log

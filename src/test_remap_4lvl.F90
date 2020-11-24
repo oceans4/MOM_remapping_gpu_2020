@@ -1,4 +1,4 @@
-program remap
+program test_remap_4lvl
   use MOM_remapping, only : remapping_CS
   use MOM_remapping, only : initialize_remapping
   use MOM_remapping, only : dzFromH1H2

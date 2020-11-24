@@ -1,4 +1,4 @@
-program remap2
+program test_remap_70lvl
 
   use MOM_remapping, only : remapping_CS
   use MOM_remapping, only : initialize_remapping
