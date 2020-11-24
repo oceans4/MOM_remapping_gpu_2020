@@ -9,16 +9,14 @@ use MOM_string_functions, only : uppercase
 use regrid_edge_values, only : edge_values_explicit_h4, edge_values_implicit_h4
 use regrid_edge_values, only : edge_values_implicit_h4, edge_values_implicit_h6
 use regrid_edge_values, only : edge_slopes_implicit_h3, edge_slopes_implicit_h5
-!use PCM_functions, only : PCM_reconstruction
+use PCM_functions, only : PCM_reconstruction
 use PLM_functions, only : PLM_reconstruction, PLM_boundary_extrapolation
-!use PPM_functions, only : PPM_reconstruction, PPM_boundary_extrapolation
-!use PQM_functions, only : PQM_reconstruction, PQM_boundary_extrapolation_v1
+use PPM_functions, only : PPM_reconstruction, PPM_boundary_extrapolation
+use PQM_functions, only : PQM_reconstruction, PQM_boundary_extrapolation_v1
 
 use iso_fortran_env, only : stdout=>output_unit, stderr=>error_unit
 
 implicit none ; private
-
-!#include "MOM_memory.h"
 
 
 !> Container for remapping parameters
@@ -384,61 +382,61 @@ subroutine build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, &
   iMethod = -999
 
   local_remapping_scheme = CS%remapping_scheme
-!  if (n0<=1) then
-!    local_remapping_scheme = REMAPPING_PCM
-!  elseif (n0<=3) then
+  if (n0<=1) then
+    local_remapping_scheme = REMAPPING_PCM
+  elseif (n0<=3) then
     local_remapping_scheme = min( local_remapping_scheme, REMAPPING_PLM )
-!  elseif (n0<=4) then
-!    local_remapping_scheme = min( local_remapping_scheme, REMAPPING_PPM_H4 )
-!  endif
-!  select case ( local_remapping_scheme )
-!    case ( REMAPPING_PCM )
-!      call PCM_reconstruction( n0, u0, ppoly_r_E, ppoly_r_coefs)
-!      iMethod = INTEGRATION_PCM
-!    case ( REMAPPING_PLM )
+  elseif (n0<=4) then
+    local_remapping_scheme = min( local_remapping_scheme, REMAPPING_PPM_H4 )
+  endif
+  select case ( local_remapping_scheme )
+    case ( REMAPPING_PCM )
+      call PCM_reconstruction( n0, u0, ppoly_r_E, ppoly_r_coefs)
+      iMethod = INTEGRATION_PCM
+    case ( REMAPPING_PLM )
       call PLM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect )
       if ( CS%boundary_extrapolation ) then
         call PLM_boundary_extrapolation( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect)
       endif
       iMethod = INTEGRATION_PLM
-!    case ( REMAPPING_PPM_H4 )
-!      call edge_values_explicit_h4( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
-!      call PPM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect, answers_2018=CS%answers_2018 )
-!      if ( CS%boundary_extrapolation ) then
-!        call PPM_boundary_extrapolation( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect )
-!      endif
-!      iMethod = INTEGRATION_PPM
-!    case ( REMAPPING_PPM_IH4 )
-!      call edge_values_implicit_h4( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
-!      call PPM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect, answers_2018=CS%answers_2018 )
-!      if ( CS%boundary_extrapolation ) then
-!        call PPM_boundary_extrapolation( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect )
-!      endif
-!      iMethod = INTEGRATION_PPM
-!    case ( REMAPPING_PQM_IH4IH3 )
-!      call edge_values_implicit_h4( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
-!      call edge_slopes_implicit_h3( n0, h0, u0, ppoly_r_S, h_neglect, answers_2018=CS%answers_2018 )
-!      call PQM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_S, ppoly_r_coefs, h_neglect, &
-!                               answers_2018=CS%answers_2018 )
-!      if ( CS%boundary_extrapolation ) then
-!        call PQM_boundary_extrapolation_v1( n0, h0, u0, ppoly_r_E, ppoly_r_S, &
-!                                            ppoly_r_coefs, h_neglect )
-!     endif
-!      iMethod = INTEGRATION_PQM
-!    case ( REMAPPING_PQM_IH6IH5 )
-!      call edge_values_implicit_h6( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
-!      call edge_slopes_implicit_h5( n0, h0, u0, ppoly_r_S, h_neglect, answers_2018=CS%answers_2018 )
-!      call PQM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_S, ppoly_r_coefs, h_neglect, &
-!                               answers_2018=CS%answers_2018 )
-!      if ( CS%boundary_extrapolation ) then
-!        call PQM_boundary_extrapolation_v1( n0, h0, u0, ppoly_r_E, ppoly_r_S, &
-!                                            ppoly_r_coefs, h_neglect )
-!      endif
-!      iMethod = INTEGRATION_PQM
-!    case default
-!      call MOM_error( FATAL, 'MOM_remapping, build_reconstructions_1d: '//&
-!           'The selected remapping method is invalid' )
-!  end select
+    case ( REMAPPING_PPM_H4 )
+      call edge_values_explicit_h4( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
+      call PPM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect, answers_2018=CS%answers_2018 )
+      if ( CS%boundary_extrapolation ) then
+        call PPM_boundary_extrapolation( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect )
+      endif
+      iMethod = INTEGRATION_PPM
+    case ( REMAPPING_PPM_IH4 )
+      call edge_values_implicit_h4( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
+      call PPM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect, answers_2018=CS%answers_2018 )
+      if ( CS%boundary_extrapolation ) then
+        call PPM_boundary_extrapolation( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect )
+      endif
+      iMethod = INTEGRATION_PPM
+    case ( REMAPPING_PQM_IH4IH3 )
+      call edge_values_implicit_h4( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
+      call edge_slopes_implicit_h3( n0, h0, u0, ppoly_r_S, h_neglect, answers_2018=CS%answers_2018 )
+      call PQM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_S, ppoly_r_coefs, h_neglect, &
+                               answers_2018=CS%answers_2018 )
+      if ( CS%boundary_extrapolation ) then
+        call PQM_boundary_extrapolation_v1( n0, h0, u0, ppoly_r_E, ppoly_r_S, &
+                                            ppoly_r_coefs, h_neglect )
+      endif
+      iMethod = INTEGRATION_PQM
+    case ( REMAPPING_PQM_IH6IH5 )
+      call edge_values_implicit_h6( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
+      call edge_slopes_implicit_h5( n0, h0, u0, ppoly_r_S, h_neglect, answers_2018=CS%answers_2018 )
+      call PQM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_S, ppoly_r_coefs, h_neglect, &
+                               answers_2018=CS%answers_2018 )
+      if ( CS%boundary_extrapolation ) then
+        call PQM_boundary_extrapolation_v1( n0, h0, u0, ppoly_r_E, ppoly_r_S, &
+                                            ppoly_r_coefs, h_neglect )
+      endif
+      iMethod = INTEGRATION_PQM
+    case default
+      call MOM_error( FATAL, 'MOM_remapping, build_reconstructions_1d: '//&
+           'The selected remapping method is invalid' )
+  end select
 
 end subroutine build_reconstructions_1d
 
@@ -1576,29 +1574,29 @@ subroutine setReconstructionType(string,CS)
   ! Local variables
   integer :: degree
   degree = -99
-!  select case ( uppercase(trim(string)) )
-!    case ("PCM")
-!      CS%remapping_scheme = REMAPPING_PCM
-!      degree = 0
-!    case ("PLM")
+  select case ( uppercase(trim(string)) )
+    case ("PCM")
+      CS%remapping_scheme = REMAPPING_PCM
+      degree = 0
+    case ("PLM")
       CS%remapping_scheme = REMAPPING_PLM
       degree = 1
-!    case ("PPM_H4")
-!      CS%remapping_scheme = REMAPPING_PPM_H4
-!      degree = 2
-!    case ("PPM_IH4")
-!      CS%remapping_scheme = REMAPPING_PPM_IH4
-!      degree = 2
-!    case ("PQM_IH4IH3")
-!      CS%remapping_scheme = REMAPPING_PQM_IH4IH3
-!      degree = 4
-!    case ("PQM_IH6IH5")
-!      CS%remapping_scheme = REMAPPING_PQM_IH6IH5
-!      degree = 4
-!    case default
-!      call MOM_error(FATAL, "setReconstructionType: "//&
-!       "Unrecognized choice for REMAPPING_SCHEME ("//trim(string)//").")
-!  end select
+    case ("PPM_H4")
+      CS%remapping_scheme = REMAPPING_PPM_H4
+      degree = 2
+    case ("PPM_IH4")
+      CS%remapping_scheme = REMAPPING_PPM_IH4
+      degree = 2
+    case ("PQM_IH4IH3")
+      CS%remapping_scheme = REMAPPING_PQM_IH4IH3
+      degree = 4
+    case ("PQM_IH6IH5")
+      CS%remapping_scheme = REMAPPING_PQM_IH6IH5
+      degree = 4
+    case default
+      call MOM_error(FATAL, "setReconstructionType: "//&
+       "Unrecognized choice for REMAPPING_SCHEME ("//trim(string)//").")
+  end select
 
   CS%degree = degree
 
@@ -1682,11 +1680,64 @@ logical function remapping_unit_tests(verbose)
   ppoly0_S(:,:) = 0.0
   ppoly0_coefs(:,:) = 0.0
 
+  call edge_values_explicit_h4( n0, h0, u0, ppoly0_E, h_neglect=1e-10, answers_2018=answers_2018 )
+  call PPM_reconstruction( n0, h0, u0, ppoly0_E, ppoly0_coefs, h_neglect, answers_2018=answers_2018 )
+  call PPM_boundary_extrapolation( n0, h0, u0, ppoly0_E, ppoly0_coefs, h_neglect )
+  u1(:) = 0.
+  call remapByProjection( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                          n1, h1, INTEGRATION_PPM, u1, h_neglect )
   do i=1,n1
     err=u1(i)-8.*(0.5*real(1+n1)-real(i))
     if (abs(err)>2.*epsilon(err)) thisTest = .true.
   enddo
   if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByProjection()'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  thisTest = .false.
+  u1(:) = 0.
+  call remapByDeltaZ( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                      n1, x1-x0(1:n1+1), &
+                      INTEGRATION_PPM, u1, hn1, h_neglect )
+  if (verbose) write(*,*) 'h1 (by delta)'
+  if (verbose) call dumpGrid(n1,h1,x1,u1)
+  hn1=hn1-h1
+  do i=1,n1
+    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 1'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  thisTest = .false.
+  call buildGridFromH(n2, h2, x2)
+  dx2(1:n0+1) = x2(1:n0+1) - x0
+  dx2(n0+2:n2+1) = x2(n0+2:n2+1) - x0(n0+1)
+  call remapByDeltaZ( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                      n2, dx2, &
+                      INTEGRATION_PPM, u2, hn2, h_neglect )
+  if (verbose) write(*,*) 'h2'
+  if (verbose) call dumpGrid(n2,h2,x2,u2)
+  if (verbose) write(*,*) 'hn2'
+  if (verbose) call dumpGrid(n2,hn2,x2,u2)
+
+  do i=1,n2
+    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 2'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  if (verbose) write(*,*) 'Via sub-cells'
+  thisTest = .false.
+  call remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
+                            n2, h2, INTEGRATION_PPM, .false., u2, err )
+  if (verbose) call dumpGrid(n2,h2,x2,u2)
+
+  do i=1,n2
+    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remap_via_sub_cells() 2'
   remapping_unit_tests = remapping_unit_tests .or. thisTest
 
   call remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, &
@@ -1705,6 +1756,15 @@ logical function remapping_unit_tests(verbose)
   allocate(ppoly0_coefs(5,6))
   allocate(ppoly0_E(5,2))
   allocate(ppoly0_S(5,2))
+
+  call PCM_reconstruction(3, (/1.,2.,4./), ppoly0_E(1:3,:), &
+                          ppoly0_coefs(1:3,:) )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, ppoly0_E(:,1), (/1.,2.,4./), 'PCM: left edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, ppoly0_E(:,2), (/1.,2.,4./), 'PCM: right edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, ppoly0_coefs(:,1), (/1.,2.,4./), 'PCM: P0')
 
   call PLM_reconstruction(3, (/1.,1.,1./), (/1.,3.,5./), ppoly0_E(1:3,:), &
                           ppoly0_coefs(1:3,:), h_neglect )
@@ -1752,6 +1812,58 @@ logical function remapping_unit_tests(verbose)
 
   call edge_values_explicit_h4( 5, (/1.,1.,1.,1.,1./), (/1.,3.,5.,7.,9./), ppoly0_E, &
                                 h_neglect=1e-10, answers_2018=answers_2018 )
+  ! The next two tests currently fail due to roundoff, but pass when given a reasonable tolerance.
+  thisTest = test_answer(v, 5, ppoly0_E(:,1), (/0.,2.,4.,6.,8./), 'Line H4: left edges', tol=8.0e-15)
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  thisTest = test_answer(v, 5, ppoly0_E(:,2), (/2.,4.,6.,8.,10./), 'Line H4: right edges', tol=1.0e-14)
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  ppoly0_E(:,1) = (/0.,2.,4.,6.,8./)
+  ppoly0_E(:,2) = (/2.,4.,6.,8.,10./)
+  call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/1.,3.,5.,7.,9./), ppoly0_E(1:5,:), &
+                              ppoly0_coefs(1:5,:), h_neglect, answers_2018=answers_2018 )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,1), (/1.,2.,4.,6.,9./), 'Line PPM: P0')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,2), (/0.,2.,2.,2.,0./), 'Line PPM: P1')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,3), (/0.,0.,0.,0.,0./), 'Line PPM: P2')
+
+  call edge_values_explicit_h4( 5, (/1.,1.,1.,1.,1./), (/1.,1.,7.,19.,37./), ppoly0_E, &
+                                h_neglect=1e-10, answers_2018=answers_2018 )
+  ! The next two tests are now passing when answers_2018 = .false., but otherwise only work to roundoff.
+  thisTest = test_answer(v, 5, ppoly0_E(:,1), (/3.,0.,3.,12.,27./), 'Parabola H4: left edges', tol=2.7e-14)
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  thisTest = test_answer(v, 5, ppoly0_E(:,2), (/0.,3.,12.,27.,48./), 'Parabola H4: right edges', tol=4.8e-14)
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  ppoly0_E(:,1) = (/0.,0.,3.,12.,27./)
+  ppoly0_E(:,2) = (/0.,3.,12.,27.,48./)
+  call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/0.,1.,7.,19.,37./), ppoly0_E(1:5,:), &
+                          ppoly0_coefs(1:5,:), h_neglect, answers_2018=answers_2018 )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_E(:,1), (/0.,0.,3.,12.,37./), 'Parabola PPM: left edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_E(:,2), (/0.,3.,12.,27.,37./), 'Parabola PPM: right edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,1), (/0.,0.,3.,12.,37./), 'Parabola PPM: P0')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,2), (/0.,0.,6.,12.,0./), 'Parabola PPM: P1')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,3), (/0.,3.,3.,3.,0./), 'Parabola PPM: P2')
+
+  ppoly0_E(:,1) = (/0.,0.,6.,10.,15./)
+  ppoly0_E(:,2) = (/0.,6.,12.,17.,15./)
+  call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/0.,5.,7.,16.,15./), ppoly0_E(1:5,:), &
+                          ppoly0_coefs(1:5,:), h_neglect, answers_2018=answers_2018 )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_E(:,1), (/0.,3.,6.,16.,15./), 'Limits PPM: left edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_E(:,2), (/0.,6.,9.,16.,15./), 'Limits PPM: right edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,1), (/0.,3.,6.,16.,15./), 'Limits PPM: P0')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,2), (/0.,6.,0.,0.,0./), 'Limits PPM: P1')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, ppoly0_coefs(:,3), (/0.,-3.,3.,0.,0./), 'Limits PPM: P2')
 
   call PLM_reconstruction(4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), ppoly0_E(1:4,:), &
                           ppoly0_coefs(1:4,:), h_neglect )

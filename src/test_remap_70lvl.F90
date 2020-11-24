@@ -3,8 +3,9 @@ program test_remap_70lvl
   use MOM_remapping, only : remapping_CS
   use MOM_remapping, only : initialize_remapping
   use MOM_remapping, only : remapping_core_h
+  use MOM_remapping, only : remapping_set_param
 
-  integer, parameter :: imax=10000 ! Number of columns
+  integer, parameter :: imax=100000 ! Number of columns
   integer, parameter :: n0 = 70 ! Number of layers in source grid
   integer, parameter :: n1 = 35 ! Number of layers in target grid
   real :: h0(imax,n0) ! Source grid 
@@ -45,13 +46,58 @@ program test_remap_70lvl
     enddo
   enddo
 
-  ! Do the remapping
-  call initialize_remapping(CS, 'PLM', answers_2018=.false.)
+  ! Remap using PCM
+  call initialize_remapping(CS, 'PCM', answers_2018=.false.)
   call cpu_time(cptim1)
   do i=1,imax
     call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
   enddo
   call cpu_time(cptim2)
-  print '(''time taken '',f8.3)', (cptim2 - cptim1)
+  print '(''PCM time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
+  ! Remap using PLM
+  call remapping_set_param(CS, remapping_scheme='PLM')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PLM time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
+  ! Remap using PPM with explicit edge values
+  call remapping_set_param(CS, remapping_scheme='PPM_H4')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PPM_H4 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
+  ! Remap using PPM with implicit edge values
+  call remapping_set_param(CS, remapping_scheme='PPM_IH4')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PPM_IH4 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
+  ! Remap using PQM with IH4-IH3
+  call remapping_set_param(CS, remapping_scheme='PQM_IH4IH3')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PQM_IH4IH3 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
+  ! Remap using PQM with IH6-IH5
+  call remapping_set_param(CS, remapping_scheme='PQM_IH6IH5')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PQM_IH6IH5 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
 
 end program
