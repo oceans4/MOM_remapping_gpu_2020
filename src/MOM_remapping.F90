@@ -12,13 +12,11 @@ use regrid_edge_values, only : edge_slopes_implicit_h3, edge_slopes_implicit_h5
 use PCM_functions, only : PCM_reconstruction
 use PLM_functions, only : PLM_reconstruction, PLM_boundary_extrapolation
 use PPM_functions, only : PPM_reconstruction, PPM_boundary_extrapolation
-!use PQM_functions, only : PQM_reconstruction, PQM_boundary_extrapolation_v1
+use PQM_functions, only : PQM_reconstruction, PQM_boundary_extrapolation_v1
 
 use iso_fortran_env, only : stdout=>output_unit, stderr=>error_unit
 
 implicit none ; private
-
-!#include "MOM_memory.h"
 
 
 !> Container for remapping parameters
@@ -415,26 +413,26 @@ subroutine build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, &
         call PPM_boundary_extrapolation( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, h_neglect )
       endif
       iMethod = INTEGRATION_PPM
-!    case ( REMAPPING_PQM_IH4IH3 )
-!      call edge_values_implicit_h4( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
-!      call edge_slopes_implicit_h3( n0, h0, u0, ppoly_r_S, h_neglect, answers_2018=CS%answers_2018 )
-!      call PQM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_S, ppoly_r_coefs, h_neglect, &
-!                               answers_2018=CS%answers_2018 )
-!      if ( CS%boundary_extrapolation ) then
-!        call PQM_boundary_extrapolation_v1( n0, h0, u0, ppoly_r_E, ppoly_r_S, &
-!                                            ppoly_r_coefs, h_neglect )
-!     endif
-!      iMethod = INTEGRATION_PQM
-!    case ( REMAPPING_PQM_IH6IH5 )
-!      call edge_values_implicit_h6( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
-!      call edge_slopes_implicit_h5( n0, h0, u0, ppoly_r_S, h_neglect, answers_2018=CS%answers_2018 )
-!      call PQM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_S, ppoly_r_coefs, h_neglect, &
-!                               answers_2018=CS%answers_2018 )
-!      if ( CS%boundary_extrapolation ) then
-!        call PQM_boundary_extrapolation_v1( n0, h0, u0, ppoly_r_E, ppoly_r_S, &
-!                                            ppoly_r_coefs, h_neglect )
-!      endif
-!      iMethod = INTEGRATION_PQM
+    case ( REMAPPING_PQM_IH4IH3 )
+      call edge_values_implicit_h4( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
+      call edge_slopes_implicit_h3( n0, h0, u0, ppoly_r_S, h_neglect, answers_2018=CS%answers_2018 )
+      call PQM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_S, ppoly_r_coefs, h_neglect, &
+                               answers_2018=CS%answers_2018 )
+      if ( CS%boundary_extrapolation ) then
+        call PQM_boundary_extrapolation_v1( n0, h0, u0, ppoly_r_E, ppoly_r_S, &
+                                            ppoly_r_coefs, h_neglect )
+      endif
+      iMethod = INTEGRATION_PQM
+    case ( REMAPPING_PQM_IH6IH5 )
+      call edge_values_implicit_h6( n0, h0, u0, ppoly_r_E, h_neglect_edge, answers_2018=CS%answers_2018 )
+      call edge_slopes_implicit_h5( n0, h0, u0, ppoly_r_S, h_neglect, answers_2018=CS%answers_2018 )
+      call PQM_reconstruction( n0, h0, u0, ppoly_r_E, ppoly_r_S, ppoly_r_coefs, h_neglect, &
+                               answers_2018=CS%answers_2018 )
+      if ( CS%boundary_extrapolation ) then
+        call PQM_boundary_extrapolation_v1( n0, h0, u0, ppoly_r_E, ppoly_r_S, &
+                                            ppoly_r_coefs, h_neglect )
+      endif
+      iMethod = INTEGRATION_PQM
     case default
       call MOM_error( FATAL, 'MOM_remapping, build_reconstructions_1d: '//&
            'The selected remapping method is invalid' )
@@ -1589,12 +1587,12 @@ subroutine setReconstructionType(string,CS)
     case ("PPM_IH4")
       CS%remapping_scheme = REMAPPING_PPM_IH4
       degree = 2
-!    case ("PQM_IH4IH3")
-!      CS%remapping_scheme = REMAPPING_PQM_IH4IH3
-!      degree = 4
-!    case ("PQM_IH6IH5")
-!      CS%remapping_scheme = REMAPPING_PQM_IH6IH5
-!      degree = 4
+    case ("PQM_IH4IH3")
+      CS%remapping_scheme = REMAPPING_PQM_IH4IH3
+      degree = 4
+    case ("PQM_IH6IH5")
+      CS%remapping_scheme = REMAPPING_PQM_IH6IH5
+      degree = 4
     case default
       call MOM_error(FATAL, "setReconstructionType: "//&
        "Unrecognized choice for REMAPPING_SCHEME ("//trim(string)//").")

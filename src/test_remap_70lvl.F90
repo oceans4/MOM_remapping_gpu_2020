@@ -73,4 +73,13 @@ program test_remap_70lvl
   call cpu_time(cptim2)
   print '(''PPM_H4 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
 
+  ! Remap using PQM
+  call remapping_set_param(CS, remapping_scheme='PQM_IH4IH3')
+  call cpu_time(cptim1)
+  do i=1,imax
+    call remapping_core_h( CS, n0, h0(i,:), u0(i,:), n1, h1(i,:), u1(i,:), h_neglect=1.e-30, h_neglect_edge=1.e-30)
+  enddo
+  call cpu_time(cptim2)
+  print '(''PPM_IH4IH3 time taken: '',f8.3,'' secs'')', (cptim2 - cptim1)
+
 end program

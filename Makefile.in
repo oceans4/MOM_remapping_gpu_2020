@@ -15,14 +15,15 @@ all: test_units test_remap_4lvl test_remap_70lvl
 COMMON_OBS = MOM_remapping.o MOM_error_handler.o  MOM_string_functions.o \
              regrid_edge_values.o regrid_solvers.o \
              polynomial_functions.o \
-             PCM_functions.o PLM_functions.o PPM_functions.o
+             PCM_functions.o PLM_functions.o PPM_functions.o PQM_functions.o
 
 test_units.o test_remap_4lvl.o test_remap_70lvl.o: $(COMMON_OBS)
 MOM_remapping.o: MOM_error_handler.o regrid_edge_values.o MOM_string_functions.o \
-                 PCM_functions.o PLM_functions.o PPM_functions.o
+                 PCM_functions.o PLM_functions.o PPM_functions.o PQM_functions.o
 regrid_edge_values.o: MOM_error_handler.o regrid_solvers.o polynomial_functions.o
 regrid_solvers.o: MOM_error_handler.o
 PPM_functions.o: regrid_edge_values.o
+PQM_functions.o: regrid_edge_values.o
 
 
 # Rules
