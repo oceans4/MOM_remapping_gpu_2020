@@ -3,6 +3,7 @@ program remap
   use MOM_remapping, only : initialize_remapping
   use MOM_remapping, only : dzFromH1H2
   use MOM_remapping, only : remapping_core_w
+  use MOM_remapping, only : dumpgrid
 
   logical :: verbose=.false. !< If true, write results to stdout
   ! Local variables
