@@ -27,7 +27,10 @@ jobs:
       run: ./test_remap_4lvl
 
     - name: Run second executable
-      run: ./test_remap_70lvl
+      run: |
+        ./test_remap_70lvl 10
+        ./test_remap_70lvl 30 0
+        ./test_remap_70lvl
 
     - name: Report coverage
       run: bash <(curl -s https://codecov.io/bash)
