@@ -68,36 +68,45 @@ program test_remap_70lvl
       enddo
     enddo
   enddo
+  print *,'h0 chksum =',chksum(twdth, halo, n0, h0)
+  print *,'u0 chksum =',chksum(twdth, halo, n0, u0)
+  print *,'h1 chksum =',chksum(twdth, halo, n1, h1)
 
   ! Remap using PCM
   call initialize_remapping(CS, 'PCM', answers_2018=.false., &
                             boundary_extrapolation=.false. )
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
+  print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
   print '(''PCM time taken: '',f8.3,'' secs'')', cptime
 
   ! Remap using PLM
   call remapping_set_param(CS, remapping_scheme='PLM')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
+  print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
   print '(''PLM time taken: '',f8.3,'' secs'')', cptime
 
   ! Remap using PPM with explicit edge values
   call remapping_set_param(CS, remapping_scheme='PPM_H4')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
+  print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
   print '(''PPM_H4 time taken: '',f8.3,'' secs'')', cptime
 
   ! Remap using PPM with implicit edge values
   call remapping_set_param(CS, remapping_scheme='PPM_IH4')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
+  print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
   print '(''PPM_IH4 time taken: '',f8.3,'' secs'')', cptime
 
   ! Remap using PQM with IH4-IH3
   call remapping_set_param(CS, remapping_scheme='PQM_IH4IH3')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
+  print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
   print '(''PQM_IH4IH3 time taken: '',f8.3,'' secs'')', cptime
 
   ! Remap using PQM with IH6-IH5
   call remapping_set_param(CS, remapping_scheme='PQM_IH6IH5')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
+  print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
   print '(''PQM_IH6IH5 time taken: '',f8.3,'' secs'')', cptime
 
   contains
@@ -141,5 +150,36 @@ program test_remap_70lvl
     enddo
 
   end subroutine do_remap
+
+  !> Bit count for array
+  integer function chksum(twdth, halo, n0, u0)
+    integer, intent(in) :: twdth !< Width of square computational domain
+    integer, intent(in) :: halo  !< Size of unused halo
+    integer, intent(in) :: n0  !< Number of levels in source grid
+    real, intent(in) :: u0(1-halo:twdth+halo,1-halo:twdth+halo,n0) !< Data
+    integer, parameter :: bc_modulus = 1000000000 !< Modulus of checksum bitcount
+    integer :: i, j, k
+    chksum = 0
+    do k=1,n0
+      do j=1,twdth
+        do i=1,twdth
+          chksum = chksum + bitcount(abs(u0(i,j,k)))
+        enddo
+      enddo
+    enddo
+    chksum=mod(chksum, bc_modulus)
+  end function chksum
+
+  !> Does a bitcount of a number by first casting to an integer and then using BTEST
+  !! to check bit by bit
+  integer function bitcount(x)
+    real, intent(in) :: x !< Number to be bitcount
+
+    integer, parameter :: xk = kind(x)  !< Kind type of x
+
+    ! NOTE: Assumes that reals and integers of kind=xk are the same size
+    bitcount = popcnt(transfer(x, 1_xk))
+  end function bitcount
+
 
 end program
