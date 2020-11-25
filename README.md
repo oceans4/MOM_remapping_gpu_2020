@@ -17,7 +17,11 @@ $ make
 
 Tests:
 ```
-./test_remap_70lvl
 ./test_units
 ./test_remap_4lvl
+./test_remap_70lvl
+./test_remap_70lvl 200
+./test_remap_70lvl 30 4
 ```
+
+Arguments for `./test_remap_70lvl TW HL` are tile width (tiles are square) and halo. Defaults are TW=300 and HL=4.
