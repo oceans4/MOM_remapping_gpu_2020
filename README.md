@@ -40,5 +40,5 @@ module load compilers/nvhpc-20.9-mpi
 
 2. Build and run in your interactive session
 
-FC=pgf90 FCFLAGS="-acc" ../configure
+FC=pgf90 FCFLAGS="-acc -Minfo=accel -ta=tesla:cc70,managed,deepcopy" ../configure
 make
