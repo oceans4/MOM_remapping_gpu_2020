@@ -19,6 +19,7 @@ contains
 !> Returns a limited PLM slope following White and Adcroft, 2008. [units of u]
 !! Note that this is not the same as the Colella and Woodward method.
 real elemental pure function PLM_slope_wa(h_l, h_c, h_r, h_neglect, u_l, u_c, u_r)
+!$acc routine seq
   real, intent(in) :: h_l !< Thickness of left cell [units of grid thickness]
   real, intent(in) :: h_c !< Thickness of center cell [units of grid thickness]
   real, intent(in) :: h_r !< Thickness of right cell [units of grid thickness]
@@ -65,6 +66,7 @@ end function PLM_slope_wa
 
 !> Returns a limited PLM slope following Colella and Woodward 1984.
 real elemental pure function PLM_slope_cw(h_l, h_c, h_r, h_neglect, u_l, u_c, u_r)
+!$acc routine seq
   real, intent(in) :: h_l !< Thickness of left cell [units of grid thickness]
   real, intent(in) :: h_c !< Thickness of center cell [units of grid thickness]
   real, intent(in) :: h_r !< Thickness of right cell [units of grid thickness]
@@ -119,6 +121,7 @@ end function PLM_slope_cw
 
 !> Returns a limited PLM slope following Colella and Woodward 1984.
 real elemental pure function PLM_monotonized_slope(u_l, u_c, u_r, s_l, s_c, s_r)
+!$acc routine seq
   real, intent(in) :: u_l !< Value of left cell [units of u]
   real, intent(in) :: u_c !< Value of center cell [units of u]
   real, intent(in) :: u_r !< Value of right cell [units of u]
@@ -158,6 +161,7 @@ end function PLM_monotonized_slope
 !> Returns a PLM slope using h2 extrapolation from a cell to the left.
 !! Use the negative to extrapolate from the a cell to the right.
 real elemental pure function PLM_extrapolate_slope(h_l, h_c, h_neglect, u_l, u_c)
+!$acc routine seq
   real, intent(in) :: h_l !< Thickness of left cell [units of grid thickness]
   real, intent(in) :: h_c !< Thickness of center cell [units of grid thickness]
   real, intent(in) :: h_neglect !< A negligible thickness [units of grid thickness]
@@ -184,6 +188,7 @@ end function PLM_extrapolate_slope
 !! It is assumed that the size of the array 'u' is equal to the number of cells
 !! defining 'grid' and 'ppoly'. No consistency check is performed here.
 subroutine PLM_reconstruction( N, h, u, edge_values, ppoly_coef, h_neglect, CW84 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: h !< cell widths (size N)
   real, dimension(:),   intent(in)    :: u !< cell averages (size N)
@@ -276,6 +281,7 @@ end subroutine PLM_reconstruction
 !! It is assumed that the size of the array 'u' is equal to the number of cells
 !! defining 'grid' and 'ppoly'. No consistency check is performed here.
 subroutine PLM_boundary_extrapolation( N, h, u, edge_values, ppoly_coef, h_neglect )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: h !< cell widths (size N)
   real, dimension(:),   intent(in)    :: u !< cell averages (size N)

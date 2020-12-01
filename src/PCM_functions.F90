@@ -16,6 +16,7 @@ contains
 !! It is assumed that the dimension of 'u' is equal to the number of cells
 !! defining 'grid' and 'ppoly'. No consistency check is performed.
 subroutine PCM_reconstruction( N, u, edge_values, ppoly_coef )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: u !< cell averages
   real, dimension(:,:), intent(inout) :: edge_values !< Edge value of polynomial,

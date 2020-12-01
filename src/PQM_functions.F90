@@ -18,6 +18,7 @@ contains
 !! It is assumed that the dimension of 'u' is equal to the number of cells
 !! defining 'grid' and 'ppoly'. No consistency check is performed.
 subroutine PQM_reconstruction( N, h, u, edge_values, edge_slopes, ppoly_coef, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: h !< cell widths (size N) [H]
   real, dimension(:),   intent(in)    :: u !< cell averages (size N) [A]
@@ -73,6 +74,7 @@ end subroutine PQM_reconstruction
 !! It is assumed that the dimension of 'u' is equal to the number of cells
 !! defining 'grid' and 'ppoly'. No consistency check is performed.
 subroutine PQM_limiter( N, h, u, edge_values, edge_slopes, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: h !< cell widths (size N) [H]
   real, dimension(:),   intent(in)    :: u !< cell average properties (size N) [A]
@@ -352,6 +354,7 @@ end subroutine PQM_limiter
 !! It is assumed that the size of the array 'u' is equal to the number of cells
 !! defining 'grid' and 'ppoly'. No consistency check is performed here.
 subroutine PQM_boundary_extrapolation( N, h, u, edge_values, ppoly_coef )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: h !< cell widths (size N) [H]
   real, dimension(:),   intent(in)    :: u !< cell averages (size N) [A]
@@ -499,6 +502,7 @@ end subroutine PQM_boundary_extrapolation
 !! It is assumed that the size of the array 'u' is equal to the number of cells
 !! defining 'grid' and 'ppoly'. No consistency check is performed here.
 subroutine PQM_boundary_extrapolation_v1( N, h, u, edge_values, edge_slopes, ppoly_coef, h_neglect )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: h !< cell widths (size N) [H]
   real, dimension(:),   intent(in)    :: u !< cell averages (size N) [A]

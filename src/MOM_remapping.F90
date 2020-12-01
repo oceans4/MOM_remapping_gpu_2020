@@ -5,7 +5,9 @@ module MOM_remapping
 ! Original module written by Laurent White, 2008.06.09
 
 use MOM_error_handler, only : MOM_error, FATAL
+#ifndef _OPENACC
 use MOM_string_functions, only : uppercase
+#endif
 use regrid_edge_values, only : edge_values_explicit_h4, edge_values_implicit_h4
 use regrid_edge_values, only : edge_values_implicit_h4, edge_values_implicit_h6
 use regrid_edge_values, only : edge_slopes_implicit_h3, edge_slopes_implicit_h5
@@ -1607,7 +1609,11 @@ subroutine setReconstructionType(string,CS)
   ! Local variables
   integer :: degree
   degree = -99
+#ifdef _OPENACC
+  select case ( trim(string) )
+#endif
   select case ( uppercase(trim(string)) )
+#else
     case ("PCM")
       CS%remapping_scheme = REMAPPING_PCM
       degree = 0

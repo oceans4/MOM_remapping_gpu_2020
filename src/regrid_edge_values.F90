@@ -42,6 +42,7 @@ contains
 !! Any extrapolation scheme is applied after this routine has been called.
 !! Therefore, boundary cells are treated as if they were local extrama.
 subroutine bound_edge_values( N, h, u, edge_val, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: h !< cell widths [H]
   real, dimension(N),   intent(in)    :: u !< cell average properties in arbitrary units [A]
@@ -113,6 +114,7 @@ end subroutine bound_edge_values
 !! For each interior edge, check whether the edge values are discontinuous.
 !! If so, compute the average and replace the edge values by the average.
 subroutine average_discontinuous_edge_values( N, edge_val )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N,2), intent(inout) :: edge_val !< Edge values that may be modified [A]; the
                                            !! second index is for the two edges of each cell.
@@ -138,6 +140,7 @@ end subroutine average_discontinuous_edge_values
 !! For each interior edge, check whether the edge values are discontinuous.
 !! If so and if they are not monotonic, replace each edge value by their average.
 subroutine check_discontinuous_edge_values( N, u, edge_val )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: u !< cell averages in arbitrary units [A]
   real, dimension(N,2), intent(inout) :: edge_val !< Cell edge values [A]; the
@@ -172,6 +175,7 @@ end subroutine check_discontinuous_edge_values
 !!
 !! Boundary edge values are set to be equal to the boundary cell averages.
 subroutine edge_values_explicit_h2( N, h, u, edge_val )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: h !< cell widths [H]
   real, dimension(N),   intent(in)    :: u !< cell average properties in arbitrary units [A]
@@ -219,6 +223,7 @@ end subroutine edge_values_explicit_h2
 !!
 !! For this fourth-order scheme, at least four cells must exist.
 subroutine edge_values_explicit_h4( N, h, u, edge_val, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: h !< cell widths [H]
   real, dimension(N),   intent(in)    :: u !< cell average properties in arbitrary units [A]
@@ -384,6 +389,7 @@ end subroutine edge_values_explicit_h4
 !! There are N+1 unknowns and we are able to write N-1 equations. The
 !! boundary conditions close the system.
 subroutine edge_values_implicit_h4( N, h, u, edge_val, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: h !< cell widths [H]
   real, dimension(N),   intent(in)    :: u !< cell average properties in arbitrary units [A]
@@ -548,6 +554,7 @@ end subroutine edge_values_implicit_h4
 !> Determine a one-sided 4th order polynomial fit of u to the data points for the purposes of specifying
 !! edge values, as described in the appendix of White and Adcroft JCP 2008.
 subroutine end_value_h4(dz, u, Csys)
+!$acc routine seq
   real, dimension(4), intent(in)  :: dz    !< The thicknesses of 4 layers, starting at the edge [H].
                                            !! The values of dz must be positive.
   real, dimension(4), intent(in)  :: u     !< The average properties of 4 layers, starting at the edge [A]
@@ -694,6 +701,7 @@ end subroutine end_value_h4
 !! There are N+1 unknowns and we are able to write N-1 equations. The
 !! boundary conditions close the system.
 subroutine edge_slopes_implicit_h3( N, h, u, edge_slopes, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: h !< cell widths [H]
   real, dimension(N),   intent(in)    :: u !< cell average properties in arbitrary units [A]
@@ -864,6 +872,7 @@ end subroutine edge_slopes_implicit_h3
 !------------------------------------------------------------------------------
 !> Compute ih5 edge slopes (implicit fifth order accurate)
 subroutine edge_slopes_implicit_h5( N, h, u, edge_slopes, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: h !< cell widths [H]
   real, dimension(N),   intent(in)    :: u !< cell average properties in arbitrary units [A]
@@ -1134,6 +1143,7 @@ end subroutine edge_slopes_implicit_h5
 !!          often. Figuring out closed-form expressions for these coefficients
 !!          on nonuniform meshes turned out to be intractable.
 subroutine edge_values_implicit_h6( N, h, u, edge_val, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: h !< cell widths [H]
   real, dimension(N),   intent(in)    :: u !< cell average properties (size N) in arbitrary units [A]
@@ -1339,6 +1349,7 @@ end subroutine edge_values_implicit_h6
 !! Al, Au, and Ac are all positive (or negative) definite.  However when Ac is smaller than
 !! roundoff compared with (Al+Au), the answers are prone to inaccuracy.
 subroutine solve_diag_dominant_tridiag( Al, Ac, Au, R, X, N )
+!$acc routine seq
   integer,            intent(in)  :: N   !< The size of the system
   real, dimension(N), intent(in)  :: Ac  !< Matrix center diagonal offset from Al + Au
   real, dimension(N), intent(in)  :: Al  !< Matrix lower diagonal
@@ -1381,6 +1392,7 @@ end subroutine solve_diag_dominant_tridiag
 !! matrix into an upper triangular matrix. Back substitution then yields the answer.
 !! The matrix A must be square, with the first index varing along the row.
 subroutine linear_solver( N, A, R, X )
+!$acc routine seq
   integer,              intent(in)    :: N  !< The size of the system
   real, dimension(N,N), intent(inout) :: A  !< The matrix being inverted [nondim]
   real, dimension(N),   intent(inout) :: R  !< system right-hand side [A]
@@ -1397,10 +1409,12 @@ subroutine linear_solver( N, A, R, X )
     ! Seek a pivot for column i starting in row i, and continuing into the remaining rows.  If the
     ! pivot is in a row other than i, swap them.  If no valid pivot is found, i = N+1 after this loop.
     do k=i,N ; if ( abs(A(i,k)) > 0.0 ) exit ; enddo ! end loop to find pivot
+#ifndef _OPENACC
     if ( k > N ) then  ! No pivot could be found and the system is singular.
       write(0,*) ' A=',A
       call MOM_error( FATAL, 'The linear system sent to linear_solver is singular.' )
     endif
+#endif
 
     ! If the pivot is in a row that is different than row i, swap those two rows, noting that both
     ! rows start with i-1 zero values.
@@ -1426,10 +1440,12 @@ subroutine linear_solver( N, A, R, X )
   enddo ! end loop on i
 
   ! Solve the system by back substituting into what is now an upper-right matrix.
+#ifndef _OPENACC
   if (A(N,N) == 0.0) then  ! No pivot could be found and the system is singular.
     ! write(0,*) ' A=',A
     call MOM_error( FATAL, 'The final pivot in linear_solver is zero.' )
   endif
+ #endif
   X(N) = R(N) / A(N,N)  ! The last row can now be solved trivially.
   do i=N-1,1,-1 ! loop on rows, starting from second to last row
     X(i) = R(i)
@@ -1439,7 +1455,7 @@ subroutine linear_solver( N, A, R, X )
 end subroutine linear_solver
 
 
-
+#ifndef _OPENACC
 !> Test that A*C = R to within a tolerance, issuing a fatal error with an explanatory message if they do not.
 subroutine test_line(msg, N, A, C, R, mag, tol)
   real,               intent(in) :: mag  !< The magnitude of leading order terms in this line
@@ -1469,5 +1485,6 @@ subroutine test_line(msg, N, A, C, R, mag, tol)
   endif
 
 end subroutine test_line
+#endif
 
 end module regrid_edge_values

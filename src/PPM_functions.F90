@@ -26,6 +26,7 @@ contains
 
 !> Builds quadratic polynomials coefficients from cell mean and edge values.
 subroutine PPM_reconstruction( N, h, u, edge_values, ppoly_coef, h_neglect, answers_2018)
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(N),   intent(in)    :: h !< Cell widths [H]
   real, dimension(N),   intent(in)    :: u !< Cell averages [A]
@@ -60,6 +61,7 @@ end subroutine PPM_reconstruction
 !! after first checking that the edge values are bounded by neighbors cell averages
 !! and that the edge values are monotonic between cell averages.
 subroutine PPM_limiter_standard( N, h, u, edge_values, h_neglect, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N !< Number of cells
   real, dimension(:),   intent(in)    :: h !< cell widths (size N) [H]
   real, dimension(:),   intent(in)    :: u !< cell average properties (size N) [A]
@@ -131,6 +133,7 @@ end subroutine PPM_limiter_standard
 !------------------------------------------------------------------------------
 !> Reconstruction by parabolas within boundary cells
 subroutine PPM_boundary_extrapolation( N, h, u, edge_values, ppoly_coef, h_neglect)
+!$acc routine seq
 !------------------------------------------------------------------------------
 ! Reconstruction by parabolas within boundary cells.
 !

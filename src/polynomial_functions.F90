@@ -17,6 +17,7 @@ contains
 !! The number of coefficients is given by ncoef and x
 !! is the coordinate where the polynomial is to be evaluated.
 real function evaluation_polynomial( coeff, ncoef, x )
+!$acc routine seq
   real, dimension(:), intent(in) :: coeff !< The coefficients of the polynomial
   integer,            intent(in) :: ncoef !< The number of polynomial coefficients
   real,               intent(in) :: x     !< The position at which to evaluate the polynomial
@@ -41,6 +42,7 @@ end function evaluation_polynomial
 !! The number of coefficients is given by ncoef and x
 !! is the coordinate where the polynomial's derivative is to be evaluated.
 real function first_derivative_polynomial( coeff, ncoef, x )
+!$acc routine seq
   real, dimension(:), intent(in) :: coeff !< The coefficients of the polynomial
   integer,            intent(in) :: ncoef !< The number of polynomial coefficients
   real, intent(in)               :: x     !< The position at which to evaluate the derivative
@@ -61,6 +63,7 @@ end function first_derivative_polynomial
 !!
 !! The array of coefficients (Coeff) must be of size npoly+1.
 real function integration_polynomial( xi0, xi1, Coeff, npoly )
+!$acc routine seq
   real,               intent(in) :: xi0   !< The lower bound of the integral
   real,               intent(in) :: xi1   !< The lower bound of the integral
   real, dimension(:), intent(in) :: Coeff !< The coefficients of the polynomial

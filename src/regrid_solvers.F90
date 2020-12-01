@@ -17,6 +17,7 @@ contains
 !! matrix into an upper triangular matrix. Back substitution yields the answer.
 !! The matrix A must be square, with the first index varing down the column.
 subroutine solve_linear_system( A, R, X, N, answers_2018 )
+!$acc routine seq
   integer,              intent(in)    :: N  !< The size of the system
   real, dimension(N,N), intent(inout) :: A  !< The matrix being inverted [nondim]
   real, dimension(N),   intent(inout) :: R  !< system right-hand side [A]
@@ -50,11 +51,13 @@ subroutine solve_linear_system( A, R, X, N, answers_2018 )
       endif
     enddo ! end loop to find pivot
 
+#ifndef _OPENACC
     ! If no pivot could be found, the system is singular.
     if ( .NOT. found_pivot ) then
       write(0,*) ' A=',A
       call MOM_error( FATAL, 'The linear system is singular !' )
     endif
+#endif
 
     ! If the pivot is in a row that is different than row i, that is if
     ! k is different than i, we need to swap those two rows
@@ -109,6 +112,7 @@ end subroutine solve_linear_system
 !! matrix into an upper triangular matrix. Back substitution then yields the answer.
 !! The matrix A must be square, with the first index varing along the row.
 subroutine linear_solver( N, A, R, X )
+!$acc routine seq
   integer,              intent(in)    :: N  !< The size of the system
   real, dimension(N,N), intent(inout) :: A  !< The matrix being inverted [nondim]
   real, dimension(N),   intent(inout) :: R  !< system right-hand side [A]
@@ -127,10 +131,12 @@ subroutine linear_solver( N, A, R, X )
     ! Seek a pivot for column i starting in row i, and continuing into the remaining rows.  If the
     ! pivot is in a row other than i, swap them.  If no valid pivot is found, i = N+1 after this loop.
     do k=i,N ; if ( abs( A(i,k) ) > eps ) exit ; enddo ! end loop to find pivot
+#ifndef _OPENACC
     if ( k > N ) then  ! No pivot could be found and the system is singular.
       write(0,*) ' A=',A
       call MOM_error( FATAL, 'The linear system is singular !' )
     endif
+#endif
 
     ! If the pivot is in a row that is different than row i, swap those two rows, noting that both
     ! rows start with i-1 zero values.
@@ -170,6 +176,7 @@ end subroutine linear_solver
 !! This routine uses Thomas's algorithm to solve the tridiagonal system AX = R.
 !! (A is made up of lower, middle and upper diagonals)
 subroutine solve_tridiagonal_system( Al, Ad, Au, R, X, N, answers_2018 )
+!$acc routine seq
   integer,            intent(in)  :: N   !< The size of the system
   real, dimension(N), intent(in)  :: Ad  !< Matrix center diagonal
   real, dimension(N), intent(in)  :: Al  !< Matrix lower diagonal
@@ -232,6 +239,7 @@ end subroutine solve_tridiagonal_system
 !! Al, Au, and Ac are all positive (or negative) definite.  However when Ac is smaller than
 !! roundoff compared with (Al+Au), the answers are prone to inaccuracy.
 subroutine solve_diag_dominant_tridiag( Al, Ac, Au, R, X, N )
+!$acc routine seq
   integer,            intent(in)  :: N   !< The size of the system
   real, dimension(N), intent(in)  :: Ac  !< Matrix center diagonal offset from Al + Au
   real, dimension(N), intent(in)  :: Al  !< Matrix lower diagonal
