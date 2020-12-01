@@ -39,7 +39,10 @@ type, public :: remapping_CS
 end type
 
 ! The following routines are visible to the outside world
-public remapping_core_h, remapping_core_w
+public remapping_core_h
+#ifndef _OPENACC
+public remapping_core_w
+#endif
 public initialize_remapping, end_remapping, remapping_set_param, extract_member_remapping_CS
 public remapping_unit_tests, build_reconstructions_1d, average_value_ppoly
 public dzFromH1H2
@@ -187,6 +190,7 @@ end function isPosSumErrSignificant
 
 !> Remaps column of values u0 on grid h0 to grid h1 assuming the top edge is aligned.
 subroutine remapping_core_h(CS, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
+!$acc routine seq
   type(remapping_CS),  intent(in)  :: CS !< Remapping control structure
   integer,             intent(in)  :: n0 !< Number of cells on source grid
   real, dimension(n0), intent(in)  :: h0 !< Cell widths on source grid
@@ -215,13 +219,16 @@ subroutine remapping_core_h(CS, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edg
   call build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, ppoly_r_E, ppoly_r_S, iMethod, &
                                  hNeglect, hNeglect_edge )
 
+#ifndef _OPENACC
   if (CS%check_reconstruction) call check_reconstructions_1d(n0, h0, u0, CS%degree, &
                                    CS%boundary_extrapolation, ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
+#endif
 
 
   call remap_via_sub_cells( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, n1, h1, iMethod, &
                             CS%force_bounds_in_subcell, u1, uh_err )
 
+#ifndef _OPENACC
   if (CS%check_remapping) then
     ! Check errors and bounds
     call measure_input_bounds( n0, h0, u0, ppoly_r_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
@@ -259,9 +266,11 @@ subroutine remapping_core_h(CS, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edg
     endif
     endif ! method<5
   endif
+#endif
 
 end subroutine remapping_core_h
 
+#ifndef _OPENACC
 !> Remaps column of values u0 on grid h0 to implied grid h1
 !! where the interfaces of h1 differ from those of h0 by dx.
 subroutine remapping_core_w( CS, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_edge )
@@ -295,8 +304,10 @@ subroutine remapping_core_w( CS, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_ed
   call build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, ppoly_r_E, ppoly_r_S, iMethod,&
                                   hNeglect, hNeglect_edge )
 
+#ifndef _OPENACC
   if (CS%check_reconstruction) call check_reconstructions_1d(n0, h0, u0, CS%degree, &
                                    CS%boundary_extrapolation, ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
+#endif
 
   ! This is a temporary step prior to switching to remapping_core_h()
   do k = 1, n1
@@ -350,11 +361,13 @@ subroutine remapping_core_w( CS, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_ed
   endif
 
 end subroutine remapping_core_w
+#endif
 
 !> Creates polynomial reconstructions of u0 on the source grid h0.
 subroutine build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, &
                                      ppoly_r_E, ppoly_r_S, iMethod, h_neglect, &
                                      h_neglect_edge )
+!$acc routine seq
   type(remapping_CS),    intent(in)  :: CS !< Remapping control structure
   integer,               intent(in)  :: n0 !< Number of cells on source grid
   real, dimension(n0),   intent(in)  :: h0 !< Cell widths on source grid
@@ -433,13 +446,16 @@ subroutine build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, &
                                             ppoly_r_coefs, h_neglect )
       endif
       iMethod = INTEGRATION_PQM
+#ifndef _OPENACC
     case default
       call MOM_error( FATAL, 'MOM_remapping, build_reconstructions_1d: '//&
            'The selected remapping method is invalid' )
+#endif
   end select
 
 end subroutine build_reconstructions_1d
 
+ #ifndef _OPENACC
 !> Checks that edge values and reconstructions satisfy bounds
 subroutine check_reconstructions_1d(n0, h0, u0, deg, boundary_extrapolation, &
                                     ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
@@ -511,12 +527,14 @@ subroutine check_reconstructions_1d(n0, h0, u0, deg, boundary_extrapolation, &
   enddo
 
 end subroutine check_reconstructions_1d
+#endif
 
 !> Remaps column of n0 values u0 on grid h0 to grid h1 with n1 cells by calculating
 !! the n0+n1+1 sub-integrals of the intersection of h0 and h1, and the summing the
 !! appropriate integrals into the h1*u1 values.  h0 and h1 must have the same units.
 subroutine remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, n1, h1, method, &
                                 force_bounds_in_subcell, u1, uh_err, ah_sub, aisub_src, aiss, aise )
+!$acc routine seq
   integer,           intent(in)    :: n0     !< Number of cells in source grid
   real,              intent(in)    :: h0(n0)  !< Source grid widths (size n0)
   real,              intent(in)    :: u0(n0)  !< Source cell averages (size n0)
@@ -927,6 +945,7 @@ end subroutine remap_via_sub_cells
 !! between the non-dimensional positions xa and xb (xa<=xb) with dimensional
 !! separation dh.
 real function average_value_ppoly( n0, u0, ppoly0_E, ppoly0_coefs, method, i0, xa, xb)
+!$acc routine seq
   integer,       intent(in)    :: n0     !< Number of cells in source grid
   real,          intent(in)    :: u0(:)  !< Cell means
   real,          intent(in)    :: ppoly0_E(:,:)     !< Edge value of polynomial
@@ -980,8 +999,10 @@ real function average_value_ppoly( n0, u0, ppoly0_E, ppoly0_coefs, method, i0, x
           + ( ppoly0_coefs(i0,3) * r_3 * ( xa2pxb2 + xa*xb )                             &
           + ( ppoly0_coefs(i0,4) * 0.25* ( xa2pxb2 * xapxb )                             &
           +   ppoly0_coefs(i0,5) * 0.2 * ( ( xb*xb_2 + xa*xa_2 ) * xapxb + xa_2*xb_2 ) ) ) ) )
+#ifndef _OPENACC
       case default
         call MOM_error( FATAL,'The selected integration method is invalid' )
+#endif
     end select
   else ! dh == 0.
     select case ( method )
@@ -1018,8 +1039,10 @@ real function average_value_ppoly( n0, u0, ppoly0_E, ppoly0_coefs, method, i0, x
               + xa * ( ppoly0_coefs(i0,3)   &
               + xa * ( ppoly0_coefs(i0,4)   &
               + xa *   ppoly0_coefs(i0,5) ) ) )
+#ifndef _OPENACC
       case default
         call MOM_error( FATAL,'The selected integration method is invalid' )
+#endif
     end select
   endif
   average_value_ppoly = u_ave
@@ -1224,6 +1247,7 @@ end subroutine remapByDeltaZ
 !> Integrate the reconstructed column profile over a single cell
 subroutine integrateReconOnInterval( n0, h0, u0, ppoly0_E, ppoly0_coefs, method, &
                                      xL, xR, hC, uAve, jStart, xStart, h_neglect )
+!$acc routine seq
   integer,              intent(in)    :: n0     !< Number of cells in source grid
   real, dimension(:),   intent(in)    :: h0     !< Source grid sizes (size n0)
   real, dimension(:),   intent(in)    :: u0     !< Source cell averages
@@ -1285,10 +1309,11 @@ subroutine integrateReconOnInterval( n0, h0, u0, ppoly0_E, ppoly0_coefs, method,
   ! cell lies outside the source grid. In other words, it means that
   ! the source and target grids do not cover the same physical domain
   ! and there is something very wrong !
+#ifndef _OPENACC
   if ( jL == -1 ) call MOM_error(FATAL, &
           'MOM_remapping, integrateReconOnInterval: '//&
           'The location of the left-most cell could not be found')
-
+#endif
 
   ! ============================================================
   ! Check whether target cell is vanished. If it is, the cell
@@ -1661,6 +1686,7 @@ logical function remapping_unit_tests(verbose)
   if (verbose) write(*,*) 'h0 (test data)'
   if (verbose) call dumpGrid(n0,h0,x0,u0)
 
+#ifndef _OPENACC
   call dzFromH1H2( n0, h0, n1, h1, dx1 )
   call remapping_core_w( CS, n0, h0, u0, n1, dx1, u1, h_neglect, h_neglect_edge)
   do i=1,n1
@@ -1671,6 +1697,7 @@ logical function remapping_unit_tests(verbose)
   if (verbose) call dumpGrid(n1,h1,x1,u1)
   if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapping_core_w()'
   remapping_unit_tests = remapping_unit_tests .or. thisTest
+#endif
 
   thisTest = .false.
   allocate(edges(n0,2))
