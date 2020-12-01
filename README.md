@@ -44,15 +44,15 @@ module load compilers/nvhpc-20.9-mpi
 
 CPU only
 ```
-FC=pgf90 ../configure
+FC=pgf90 FCFLAGS="-r8 -O4" ../configure
 make
 ```
 
 GPU-enabled
 ```
-FC=pgf90 FCFLAGS="-acc -Minfo=accel -ta=tesla:cc70,managed,deepcopy" ../configure
+FC=pgf90 FCFLAGS="-acc -r8 -O4 -Minfo=accel -ta=tesla:cc70,managed,deepcopy" LDFLAGS="-acc" ../configure
 make
-nvprof ./test_remap_70lvl
+PGI_ACC_TIME=1 nvprof ./test_remap_70lvl
 ```
 
 
@@ -61,23 +61,23 @@ Some base line timings
 
 CPU
 ```
-$ ./cpu-test_remap_70lvl
+$ $ ./cpu-test_remap_70lvl
  Tile width =          300  halo =            4
  h0 chksum =    219290934
  u0 chksum =    219309289
  h1 chksum =    110132732
  u1 chksum =    109444831
-PCM time taken:    0.614 secs
+PCM time taken:    0.458 secs
  u1 chksum =    109438112
-PLM time taken:    0.783 secs
+PLM time taken:    0.579 secs
  u1 chksum =    109429446
-PPM_H4 time taken:    0.993 secs
- u1 chksum =    109421911
-PPM_IH4 time taken:    1.083 secs
- u1 chksum =    109431699
-PQM_IH4IH3 time taken:    1.433 secs
- u1 chksum =    109427885
-PQM_IH6IH5 time taken:    5.671 secs
+PPM_H4 time taken:    0.685 secs
+ u1 chksum =    109421885
+PPM_IH4 time taken:    0.766 secs
+ u1 chksum =    109430597
+PQM_IH4IH3 time taken:    1.082 secs
+ u1 chksum =    109424799
+PQM_IH6IH5 time taken:    3.636 secs
 ```
 
 GPU
