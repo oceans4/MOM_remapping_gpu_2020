@@ -455,7 +455,7 @@ subroutine build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, &
 
 end subroutine build_reconstructions_1d
 
- #ifndef _OPENACC
+#ifndef _OPENACC
 !> Checks that edge values and reconstructions satisfy bounds
 subroutine check_reconstructions_1d(n0, h0, u0, deg, boundary_extrapolation, &
                                     ppoly_r_coefs, ppoly_r_E, ppoly_r_S)

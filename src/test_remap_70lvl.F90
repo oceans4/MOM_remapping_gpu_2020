@@ -149,7 +149,7 @@ program test_remap_70lvl
     call cpu_time(cptim2)
     cputime = cptim2 - cptim1
 
-    #ifndef _OPENACC
+#ifndef _OPENACC
     ! Redo with checks turned on
     call remapping_set_param(CS, check_reconstruction=.true., check_remapping=.true.)
     do j = 1, twdth
@@ -158,7 +158,7 @@ program test_remap_70lvl
                               h_neglect=1.e-30, h_neglect_edge=1.e-30)
       enddo
     enddo
-    #endif
+#endif
 
   end subroutine do_remap
 

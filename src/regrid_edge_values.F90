@@ -1445,7 +1445,7 @@ subroutine linear_solver( N, A, R, X )
     ! write(0,*) ' A=',A
     call MOM_error( FATAL, 'The final pivot in linear_solver is zero.' )
   endif
- #endif
+#endif
   X(N) = R(N) / A(N,N)  ! The last row can now be solved trivially.
   do i=N-1,1,-1 ! loop on rows, starting from second to last row
     X(i) = R(i)
