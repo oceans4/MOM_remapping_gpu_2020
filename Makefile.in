@@ -13,6 +13,7 @@ all: test_units test_remap_4lvl test_remap_70lvl
 # Dependencies
 
 COMMON_OBS = MOM_remapping.o MOM_error_handler.o  MOM_string_functions.o \
+             MersenneTwister.o \
              regrid_edge_values.o regrid_solvers.o \
              polynomial_functions.o \
              PCM_functions.o PLM_functions.o PPM_functions.o PQM_functions.o
