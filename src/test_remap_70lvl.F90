@@ -127,15 +127,22 @@ program test_remap_70lvl
     ! Local variables
     integer :: i,j
     real :: cptim1, cptim2
+    real :: cch0(n0), ccu0(n0), cch1(n1), ccu1(n1) ! Copy in k,i,j
 
     ! Production version does not use "checks"
     call remapping_set_param(CS, check_reconstruction=.false., check_remapping=.false.)
     call cpu_time(cptim1)
- !$acc parallel loop
+!$acc parallel loop collapse(2)
     do j = 1, twdth
       do i = 1, twdth
-        call remapping_core_h(CS, n0, h0(i,j,:), u0(i,j,:), n1, h1(i,j,:), u1(i,j,:), &
+       !call remapping_core_h(CS, n0, h0(i,j,:), u0(i,j,:), n1, h1(i,j,:), u1(i,j,:), &
+       !                      h_neglect=1.e-30, h_neglect_edge=1.e-30)
+        cch0(:) = h0(i,j,:)
+        ccu0(:) = u0(i,j,:)
+        cch1(:) = h1(i,j,:)
+        call remapping_core_h(CS, n0, cch0, ccu0, n1, cch1, ccu1, &
                               h_neglect=1.e-30, h_neglect_edge=1.e-30)
+        u1(i,j,:) = ccu1(:)
       enddo
     enddo
 !$acc end parallel
