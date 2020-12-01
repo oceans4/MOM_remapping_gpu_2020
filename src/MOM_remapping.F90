@@ -1352,8 +1352,10 @@ subroutine integrateReconOnInterval( n0, h0, u0, ppoly0_E, ppoly0_coefs, method,
                + xi0 * ( ppoly0_coefs(jL,3)   &
                + xi0 * ( ppoly0_coefs(jL,4)   &
                + xi0 *   ppoly0_coefs(jL,5) ) ) )
+#ifndef _OPENACC
         case default
           call MOM_error( FATAL,'The selected integration method is invalid' )
+#endif
       end select
 
     endif ! end checking whether source cell is vanished
@@ -1428,8 +1430,10 @@ subroutine integrateReconOnInterval( n0, h0, u0, ppoly0_E, ppoly0_coefs, method,
             + ( ppoly0_coefs(jL,3) * r_3 * ( x02px12 + xi0*xi1 ) &
             +   ppoly0_coefs(jL,4) * 0.25* ( x02px12 * x0px1 )   &
             +   ppoly0_coefs(jL,5) * 0.2 * ( ( xi1*x1_2 + xi0*x0_2 ) * x0px1 + x0_2*x1_2 ) ) ) )
+#ifndef _OPENACC
         case default
           call MOM_error( FATAL,'The selected integration method is invalid' )
+#endif
       end select
 
     else
@@ -1480,8 +1484,10 @@ subroutine integrateReconOnInterval( n0, h0, u0, ppoly0_E, ppoly0_coefs, method,
             + ( ppoly0_coefs(jL,3) * r_3 * ( x02px12 + xi0*xi1 ) &
             +   ppoly0_coefs(jL,4) * 0.25* ( x02px12 * x0px1 )   &
             +   ppoly0_coefs(jL,5) * 0.2 * ( ( xi1*x1_2 + xi0*x0_2 ) * x0px1 + x0_2*x1_2 ) ) ) )
+#ifndef _OPENACC
         case default
           call MOM_error( FATAL, 'The selected integration method is invalid' )
+#endif
       end select
 
       ! Integrate contents within cells strictly comprised between jL and jR
@@ -1525,8 +1531,10 @@ subroutine integrateReconOnInterval( n0, h0, u0, ppoly0_E, ppoly0_coefs, method,
             + ( ppoly0_coefs(jR,3) * r_3 * ( x02px12 + xi0*xi1 ) &
             +   ppoly0_coefs(jR,4) * 0.25* ( x02px12 * x0px1 )   &
             +   ppoly0_coefs(jR,5) * 0.2 * ( ( xi1*x1_2 + xi0*x0_2 ) * x0px1 + x0_2*x1_2 ) ) ) )
+#ifndef _OPENACC
         case default
           call MOM_error( FATAL,'The selected integration method is invalid' )
+#endif
       end select
 
     endif ! end integration for non-vanished cells
@@ -1618,9 +1626,11 @@ subroutine setReconstructionType(string,CS)
     case ("PQM_IH6IH5")
       CS%remapping_scheme = REMAPPING_PQM_IH6IH5
       degree = 4
+#ifndef _OPENACC
     case default
       call MOM_error(FATAL, "setReconstructionType: "//&
        "Unrecognized choice for REMAPPING_SCHEME ("//trim(string)//").")
+#endif
   end select
 
   CS%degree = degree
