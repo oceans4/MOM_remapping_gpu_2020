@@ -25,3 +25,20 @@ Tests:
 ```
 
 Arguments for `./test_remap_70lvl TW HL` are tile width (tiles are square) and halo. Defaults are TW=300 and HL=4.
+
+
+NOAA Hackathon Notes
+=====================
+
+1. From  the login node, start in interactive session on the compute node:
+
+srun --ntasks=5 --nodes=1 --cpus-per-task=2 --partition=batch --time=06:00:00 --gres=gpu:1 --pty /bin/bash
+
+2. Load compiler
+
+module load compilers/nvhpc-20.9-mpi
+
+2. Build and run in your interactive session
+
+FC=pgf90 ../configure
+make
