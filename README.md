@@ -40,5 +40,5 @@ module load compilers/nvhpc-20.9-mpi
 
 2. Build and run in your interactive session
 
-FC=pgf90 ../configure
+FC=pgf90 FCFLAGS="-acc" ../configure
 make
