@@ -55,6 +55,12 @@ make
 PGI_ACC_TIME=1 nvprof ./test_remap_70lvl
 ```
 
+3. Gui profile
+```
+module load nsight-systems cuda/11.0.2
+nsys profile -t openacc --stats=true --force-overwrite true -o profile ./test_remap_70lvl
+nsys-ui
+```
 
 Some base line timings
 ======================
