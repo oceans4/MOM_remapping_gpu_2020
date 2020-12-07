@@ -125,33 +125,24 @@ program test_remap_70lvl
     real, intent(inout) :: u1(1-halo:twdth+halo,1-halo:twdth+halo,n1) !< Target data
     real, intent(out) :: cputime !< CPU time used
     ! Local variables
-    integer :: i,j
     real :: cptim1, cptim2
 
     ! Production version does not use "checks"
     call remapping_set_param(CS, check_reconstruction=.false., check_remapping=.false.)
     call cpu_time(cptim1)
-!$acc parallel loop collapse(2)
-    do j = 1, twdth
-      do i = 1, twdth
-        call remapping_core_h(CS, n0, h0(i,j,:), u0(i,j,:), n1, h1(i,j,:), u1(i,j,:), &
+    call remapping_core_h(CS, twdth, twdth, &
+                              n0, h0(1:twdth,1:twdth,:), u0(1:twdth,1:twdth,:), &
+                              n1, h1(1:twdth,1:twdth,:), u1(1:twdth,1:twdth,:), &
                               h_neglect=1.e-30, h_neglect_edge=1.e-30)
-      enddo
-    enddo
-!$acc end parallel
     call cpu_time(cptim2)
     cputime = cptim2 - cptim1
 
-#ifndef _OPENACC
     ! Redo with checks turned on
     call remapping_set_param(CS, check_reconstruction=.true., check_remapping=.true.)
-    do j = 1, twdth
-      do i = 1, twdth
-        call remapping_core_h(CS, n0, h0(i,j,:), u0(i,j,:), n1, h1(i,j,:), u1(i,j,:), &
+    call remapping_core_h(CS, twdth, twdth, &
+                              n0, h0(1:twdth,1:twdth,:), u0(1:twdth,1:twdth,:), &
+                              n1, h1(1:twdth,1:twdth,:), u1(1:twdth,1:twdth,:), &
                               h_neglect=1.e-30, h_neglect_edge=1.e-30)
-      enddo
-    enddo
-#endif
 
   end subroutine do_remap
 

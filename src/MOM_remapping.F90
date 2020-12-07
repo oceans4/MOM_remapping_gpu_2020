@@ -189,44 +189,58 @@ function isPosSumErrSignificant(n1, sum1, n2, sum2)
 end function isPosSumErrSignificant
 
 !> Remaps column of values u0 on grid h0 to grid h1 assuming the top edge is aligned.
-subroutine remapping_core_h(CS, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
-!$acc routine seq
-  type(remapping_CS),  intent(in)  :: CS !< Remapping control structure
-  integer,             intent(in)  :: n0 !< Number of cells on source grid
-  real, dimension(n0), intent(in)  :: h0 !< Cell widths on source grid
-  real, dimension(n0), intent(in)  :: u0 !< Cell averages on source grid
-  integer,             intent(in)  :: n1 !< Number of cells on target grid
-  real, dimension(n1), intent(in)  :: h1 !< Cell widths on target grid
-  real, dimension(n1), intent(out) :: u1 !< Cell averages on target grid
-  real, optional,      intent(in)  :: h_neglect !< A negligibly small width for the
-                                         !! purpose of cell reconstructions
-                                         !! in the same units as h0.
-  real, optional,      intent(in)  :: h_neglect_edge !< A negligibly small width
-                                         !! for the purpose of edge value
-                                         !! calculations in the same units as h0.
+subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
+  type(remapping_CS),        intent(in)  :: CS !< Remapping control structure
+  integer,                   intent(in)  :: ni !< Tile width
+  integer,                   intent(in)  :: nj !< Tile height
+  integer,                   intent(in)  :: n0 !< Number of cells in vertical on source grid
+  real, dimension(ni,nj,n0), intent(in)  :: h0 !< Cell widths on source grid
+  real, dimension(ni,nj,n0), intent(in)  :: u0 !< Cell averages on source grid
+  integer,                   intent(in)  :: n1 !< Number of cells in vertical on target grid
+  real, dimension(ni,nj,n1), intent(in)  :: h1 !< Cell widths on target grid
+  real, dimension(ni,nj,n1), intent(out) :: u1 !< Cell averages on target grid
+  real, optional,            intent(in)  :: h_neglect !< A negligibly small width for the
+                                               !! purpose of cell reconstructions
+                                               !! in the same units as h0.
+  real, optional,            intent(in)  :: h_neglect_edge !< A negligibly small width
+                                               !! for the purpose of edge value
+                                               !! calculations in the same units as h0.
   ! Local variables
   integer :: iMethod
-  real, dimension(n0,2)           :: ppoly_r_E            !Edge value of polynomial
-  real, dimension(n0,2)           :: ppoly_r_S            !Edge slope of polynomial
-  real, dimension(n0,CS%degree+1) :: ppoly_r_coefs !Coefficients of polynomial
-  integer :: k
+  real, dimension(ni,nj,n0,2)           :: ppoly_r_E     ! Edge value of polynomial
+  real, dimension(ni,nj,n0,2)           :: ppoly_r_S     ! Edge slope of polynomial
+  real, dimension(ni,nj,n0,CS%degree+1) :: ppoly_r_coefs ! Coefficients of polynomial
+  integer :: i, j, k
   real :: eps, h0tot, h0err, h1tot, h1err, u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, uh_err
   real :: hNeglect, hNeglect_edge
 
   hNeglect = 1.0e-30 ; if (present(h_neglect)) hNeglect = h_neglect
   hNeglect_edge = 1.0e-10 ; if (present(h_neglect_edge)) hNeglect_edge = h_neglect_edge
 
-  call build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, ppoly_r_E, ppoly_r_S, iMethod, &
-                                 hNeglect, hNeglect_edge )
+!$acc parallel loop collapse(2)
+  do j = 1, nj
+    do i = 1, ni
+      call build_reconstructions_1d(CS, n0, h0(i,j,:), u0(i,j,:), &
+                                    ppoly_r_coefs(i,j,:,:), ppoly_r_E(i,j,:,:), ppoly_r_S(i,j,:,:), iMethod, &
+                                    hNeglect, hNeglect_edge)
+    enddo
+  enddo
+!$acc end parallel
 
 #ifndef _OPENACC
-  if (CS%check_reconstruction) call check_reconstructions_1d(n0, h0, u0, CS%degree, &
-                                   CS%boundary_extrapolation, ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
+  if (CS%check_reconstruction) call check_reconstructions_1d(n0, h0(i,j,:), u0(i,j,:), CS%degree, &
+                                   CS%boundary_extrapolation, ppoly_r_coefs(i,j,:,:), ppoly_r_E(i,j,:,:), ppoly_r_S(i,j,:,:))
 #endif
 
-
-  call remap_via_sub_cells( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, n1, h1, iMethod, &
-                            CS%force_bounds_in_subcell, u1, uh_err )
+!$acc parallel loop collapse(2)
+  do j = 1, nj
+    do i = 1, ni
+      call remap_via_sub_cells(n0, h0(i,j,:), u0(i,j,:), ppoly_r_E(i,j,:,:), ppoly_r_coefs(i,j,:,:), &
+                               n1, h1(i,j,:), iMethod, &
+                               CS%force_bounds_in_subcell, u1(i,j,:), uh_err )
+    enddo
+  enddo
+!$acc end parallel
 
 #ifndef _OPENACC
   if (CS%check_remapping) then
