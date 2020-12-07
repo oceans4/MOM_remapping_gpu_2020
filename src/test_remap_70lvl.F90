@@ -127,33 +127,66 @@ program test_remap_70lvl
     ! Local variables
     integer :: i,j
     real :: cptim1, cptim2
+    real :: th0(n0,1-halo:twdth+halo,1-halo:twdth+halo)
+    real :: tu0(n0,1-halo:twdth+halo,1-halo:twdth+halo)
+    real :: th1(n1,1-halo:twdth+halo,1-halo:twdth+halo)
+    real :: tu1(n1,1-halo:twdth+halo,1-halo:twdth+halo)
+
+    do j = 1, twdth
+      do i = 1, twdth
+        th0(:,i,j) = h0(i,j,:)
+        tu0(:,i,j) = u0(i,j,:)
+        th1(:,i,j) = h1(i,j,:)
+      enddo
+    enddo
+
+    call do_remap_t(twdth, halo, n0, n1, CS, th0, tu0, th1, tu1, cputime)
+
+    do j = 1, twdth
+      do i = 1, twdth
+        u1(i,j,:) = tu1(:,i,j)
+      enddo
+    enddo
+
+  end subroutine do_remap
+
+  ! Remaps u0(h0) to h1 for each column in the computational domain.
+  ! Returns u1(h1) and cputime.
+  subroutine do_remap_t(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cputime)
+    integer, intent(in) :: twdth !< Width of square computational domain
+    integer, intent(in) :: halo  !< Size of unused halo
+    integer, intent(in) :: n0  !< Number of levels in source grid
+    integer, intent(in) :: n1  !< Number of levels in target grid
+    type(remapping_CS), intent(inout) :: CS ! Remapping control structure
+    real, intent(in) :: h0(n0,1-halo:twdth+halo,1-halo:twdth+halo) !< Source grid
+    real, intent(in) :: u0(n0,1-halo:twdth+halo,1-halo:twdth+halo) !< Source data
+    real, intent(in) :: h1(n1,1-halo:twdth+halo,1-halo:twdth+halo) !< Target grid
+    real, intent(inout) :: u1(n1,1-halo:twdth+halo,1-halo:twdth+halo) !< Target data
+    real, intent(out) :: cputime !< CPU time used
+    ! Local variables
+    integer :: i,j
+    real :: cptim1, cptim2
+    real lh0(n0), lu0(n0), lh1(n1), lu1(n1)
 
     ! Production version does not use "checks"
     call remapping_set_param(CS, check_reconstruction=.false., check_remapping=.false.)
     call cpu_time(cptim1)
-!$acc parallel loop collapse(2)
+!$acc parallel loop collapse(2) private(lh0,lu0,lh1,lu1)
     do j = 1, twdth
       do i = 1, twdth
-        call remapping_core_h(CS, n0, h0(i,j,:), u0(i,j,:), n1, h1(i,j,:), u1(i,j,:), &
+        lh0(:) = h0(:,i,j)
+        lu0(:) = u0(:,i,j)
+        lh1(:) = h1(:,i,j)
+        call remapping_core_h(CS, n0, lh0, lu0, n1, lh1, lu1, &
                               h_neglect=1.e-30, h_neglect_edge=1.e-30)
+        u1(:,i,j) = lu1(:)
       enddo
     enddo
 !$acc end parallel
     call cpu_time(cptim2)
     cputime = cptim2 - cptim1
 
-#ifndef _OPENACC
-    ! Redo with checks turned on
-    call remapping_set_param(CS, check_reconstruction=.true., check_remapping=.true.)
-    do j = 1, twdth
-      do i = 1, twdth
-        call remapping_core_h(CS, n0, h0(i,j,:), u0(i,j,:), n1, h1(i,j,:), u1(i,j,:), &
-                              h_neglect=1.e-30, h_neglect_edge=1.e-30)
-      enddo
-    enddo
-#endif
-
-  end subroutine do_remap
+  end subroutine do_remap_t
 
   !> Bit count for array
   integer function chksum(twdth, halo, n0, u0)
