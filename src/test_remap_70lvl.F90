@@ -132,11 +132,9 @@ program test_remap_70lvl
     ! Production version does not use "checks"
     call remapping_set_param(CS, check_reconstruction=.false., check_remapping=.false.)
     call cpu_time(cptim1)
-!$acc parallel loop collapse(2)
+!$acc parallel loop collapse(2) private(cch0,ccu0,cch1,ccu1)
     do j = 1, twdth
       do i = 1, twdth
-       !call remapping_core_h(CS, n0, h0(i,j,:), u0(i,j,:), n1, h1(i,j,:), u1(i,j,:), &
-       !                      h_neglect=1.e-30, h_neglect_edge=1.e-30)
         cch0(:) = h0(i,j,:)
         ccu0(:) = u0(i,j,:)
         cch1(:) = h1(i,j,:)
