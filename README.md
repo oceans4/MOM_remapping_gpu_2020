@@ -61,6 +61,10 @@ module load nsight-systems cuda/11.0.2
 nsys profile -t openacc --stats=true --force-overwrite true -o profile ./test_remap_70lvl
 nsys-ui
 ```
+for `nvvp`
+```
+module load gcc/7.5.0/openjdk/1.8.0
+```
 
 Some base line timings
 ======================
