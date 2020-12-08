@@ -560,18 +560,18 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   integer :: i_start1 ! Used to record which sub-cells map to target cells
   integer :: i_max ! Used to record which sub-cell is the largest contribution of a source cell
   real :: dh_max ! Used to record which sub-cell is the largest contribution of a source cell
-  real, dimension(n0+n1+1) :: h_sub ! Width of each each sub-cell
-  real, dimension(n0+n1+1) :: uh_sub ! Integral of u*h over each sub-cell
-  real, dimension(n0+n1+1) :: u_sub ! Average of u over each sub-cell
-  integer, dimension(n0+n1+1) :: isub_src ! Index of source cell for each sub-cell
-  integer, dimension(n0) :: isrc_start ! Index of first sub-cell within each source cell
-  integer, dimension(n0) :: isrc_end ! Index of last sub-cell within each source cell
-  integer, dimension(n0) :: isrc_max ! Index of thickest sub-cell within each source cell
-  real, dimension(n0) :: h0_eff ! Effective thickness of source cells
-  real, dimension(n0) :: u0_min ! Minimum value of reconstructions in source cell
-  real, dimension(n0) :: u0_max ! Minimum value of reconstructions in source cell
-  integer, dimension(n1) :: itgt_start ! Index of first sub-cell within each target cell
-  integer, dimension(n1) :: itgt_end ! Index of last sub-cell within each target cell
+  real, dimension(n0+n1+1,nij) :: h_sub ! Width of each each sub-cell
+  real, dimension(n0+n1+1,nij) :: uh_sub ! Integral of u*h over each sub-cell
+  real, dimension(n0+n1+1,nij) :: u_sub ! Average of u over each sub-cell
+  integer, dimension(n0+n1+1,nij) :: isub_src ! Index of source cell for each sub-cell
+  integer, dimension(n0,nij) :: isrc_start ! Index of first sub-cell within each source cell
+  integer, dimension(n0,nij) :: isrc_end ! Index of last sub-cell within each source cell
+  integer, dimension(n0,nij) :: isrc_max ! Index of thickest sub-cell within each source cell
+  real, dimension(n0,nij) :: h0_eff ! Effective thickness of source cells
+  real, dimension(n0,nij) :: u0_min ! Minimum value of reconstructions in source cell
+  real, dimension(n0,nij) :: u0_max ! Minimum value of reconstructions in source cell
+  integer, dimension(n1,nij) :: itgt_start ! Index of first sub-cell within each target cell
+  integer, dimension(n1,nij) :: itgt_end ! Index of last sub-cell within each target cell
   real :: xa, xb ! Non-dimensional position within a source cell (0..1)
   real :: h0_supply, h1_supply ! The amount of width available for constructing sub-cells
   real :: dh ! The width of the sub-cell
@@ -588,20 +588,23 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   logical :: tgt_has_volume !< True if h1 has not been consumed
   integer :: ij
 
-!$acc parallel loop &
-!$acc private( &
-!$acc   h_sub, uh_sub, u_sub, isub_src, isrc_start, isrc_end, isrc_max, &
-!$acc   h0_eff, u0_min, u0_max, itgt_start, itgt_end &
-!$acc )
+!$acc parallel loop 
+!!$acc private( &
+!!$acc   h_sub, uh_sub, u_sub, isub_src, isrc_start, isrc_end, isrc_max, &
+!!$acc   h0_eff, u0_min, u0_max, itgt_start, itgt_end &
+!!$acc )
   do ij = 1, nij
-
-    i0_last_thick_cell = 0
+    !i0_last_thick_cell = 0
     do i0 = 1, n0
-      u0_min(i0) = min(ppoly0_E(i0,1,ij), ppoly0_E(i0,2,ij))
-      u0_max(i0) = max(ppoly0_E(i0,1,ij), ppoly0_E(i0,2,ij))
-      if (h0(i0,ij)>0.) i0_last_thick_cell = i0
+      u0_min(i0,ij) = min(ppoly0_E(i0,1,ij), ppoly0_E(i0,2,ij))
+      u0_max(i0,ij) = max(ppoly0_E(i0,1,ij), ppoly0_E(i0,2,ij))
+    !  if (h0(i0,ij)>0.) i0_last_thick_cell = i0
     enddo
-
+  enddo
+!$acc end parallel
+print *,"first loop is executed"
+!$acc parallel loop private(h0_supply, h1_supply, i0_last_thick_cell)
+  do ij = 1, nij
     ! Initialize algorithm
     h0_supply = h0(1,ij)
     h1_supply = h1(1,ij)
@@ -614,11 +617,11 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
     dh0_eff = 0.
 
     ! First sub-cell is always vanished
-    h_sub(1) = 0.
-    isrc_start(1) = 1
-    isrc_end(1) = 1
-    isrc_max(1) = 1
-    isub_src(1) = 1
+    h_sub(1,ij) = 0.
+    isrc_start(1,ij) = 1
+    isrc_end(1,ij) = 1
+    isrc_max(1,ij) = 1
+    isub_src(1,ij) = 1
 
     ! Loop over each sub-cell to calculate intersections with source and target grids
     do i_sub = 2, n0+n1+1
@@ -635,8 +638,8 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
     ! Record the source index (i0) that this sub-cell integral belongs to. This
     ! is needed to index the reconstruction coefficients for the source cell
     ! used in the integrals of the sub-cell width.
-    isub_src(i_sub) = i0
-    h_sub(i_sub) = dh
+    isub_src(i_sub,ij) = i0
+    h_sub(i_sub,ij) = dh
 
     ! For recording the largest sub-cell within a source cell.
     if (dh >= dh_max) then
@@ -652,15 +655,15 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       h1_supply = h1_supply - dh ! Although this is a difference the result will
                                  ! be non-negative because of the conditional.
       ! Record the sub-cell start/end index that span the source cell i0.
-      isrc_start(i0) = i_start0
-      isrc_end(i0) = i_sub
+      isrc_start(i0,ij) = i_start0
+      isrc_end(i0,ij) = i_sub
       i_start0 = i_sub + 1
       ! Record the sub-cell that is the largest fraction of the source cell.
-      isrc_max(i0) = i_max
+      isrc_max(i0,ij) = i_max
       i_max = i_sub + 1
       dh_max = 0.
       ! Record the source cell thickness found by summing the sub-cell thicknesses.
-      h0_eff(i0) = dh0_eff
+      h0_eff(i0,ij) = dh0_eff
       ! Move the source index.
       if (i0 < n0) then
         i0 = i0 + 1
@@ -676,8 +679,8 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       h0_supply = h0_supply - dh ! Although this is a difference the result will
                                  ! be non-negative because of the conditional.
       ! Record the sub-cell start/end index that span the target cell i1.
-      itgt_start(i1) = i_start1
-      itgt_end(i1) = i_sub
+      itgt_start(i1,ij) = i_start1
+      itgt_end(i1,ij) = i_sub
       i_start1 = i_sub + 1
       ! Move the target index.
       if (i1 < n1) then
@@ -689,17 +692,17 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       endif
     elseif (src_has_volume) then
       ! We ran out of target volume but still have source cells to consume
-      h_sub(i_sub) = h0_supply
+      h_sub(i_sub,ij) = h0_supply
       ! Record the sub-cell start/end index that span the source cell i0.
-      isrc_start(i0) = i_start0
-      isrc_end(i0) = i_sub
+      isrc_start(i0,ij) = i_start0
+      isrc_end(i0,ij) = i_sub
       i_start0 = i_sub + 1
       ! Record the sub-cell that is the largest fraction of the source cell.
-      isrc_max(i0) = i_max
+      isrc_max(i0,ij) = i_max
       i_max = i_sub + 1
       dh_max = 0.
       ! Record the source cell thickness found by summing the sub-cell thicknesses.
-      h0_eff(i0) = dh0_eff
+      h0_eff(i0,ij) = dh0_eff
       if (i0 < n0) then
         i0 = i0 + 1
         h0_supply = h0(i0,ij)
@@ -710,10 +713,10 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       endif
     elseif (tgt_has_volume) then
       ! We ran out of source volume but still have target cells to consume
-      h_sub(i_sub) = h1_supply
+      h_sub(i_sub,ij) = h1_supply
       ! Record the sub-cell start/end index that span the target cell i1.
-      itgt_start(i1) = i_start1
-      itgt_end(i1) = i_sub
+      itgt_start(i1,ij) = i_start1
+      itgt_end(i1,ij) = i_sub
       i_start1 = i_sub + 1
       ! Move the target index.
       if (i1 < n1) then
@@ -727,59 +730,65 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       stop 'remap_via_sub_cells: THIS SHOULD NEVER HAPPEN!'
     endif
 
+   enddo
+  
   enddo
+!$acc end parallel
 
+print *,"second loop is executed"
+!$acc parallel loop
+  do ij = 1, nij
   ! Loop over each sub-cell to calculate average/integral values within each sub-cell.
   xa = 0.
   dh0_eff = 0.
-  uh_sub(1) = 0.
-  u_sub(1) = ppoly0_E(1,1,ij)
+  uh_sub(1,ij) = 0.
+  u_sub(1,ij) = ppoly0_E(1,1,ij)
   u02_err = 0.
   do i_sub = 2, n0+n1
 
     ! Sub-cell thickness from loop above
-    dh = h_sub(i_sub)
+    dh = h_sub(i_sub,ij)
 
     ! Source cell
-    i0 = isub_src(i_sub)
+    i0 = isub_src(i_sub,ij)
 
     ! Evaluate average and integral for sub-cell i_sub.
     ! Integral is over distance dh but expressed in terms of non-dimensional
     ! positions with source cell from xa to xb  (0 <= xa <= xb <= 1).
     dh0_eff = dh0_eff + dh ! Cumulative thickness within the source cell
-    if (h0_eff(i0)>0.) then
-      xb = dh0_eff / h0_eff(i0) ! This expression yields xa <= xb <= 1.0
+    if (h0_eff(i0,ij)>0.) then
+      xb = dh0_eff / h0_eff(i0,ij) ! This expression yields xa <= xb <= 1.0
       xb = min(1., xb) ! This is only needed when the total target column is wider than the source column
-      u_sub(i_sub) = average_value_ppoly( n0, u0(:,ij), ppoly0_E(:,:,ij), ppoly0_coefs(:,:,ij), method, i0, xa, xb)
+      u_sub(i_sub,ij) = average_value_ppoly( n0, u0(:,ij), ppoly0_E(:,:,ij), ppoly0_coefs(:,:,ij), method, i0, xa, xb)
     else ! Vanished cell
       xb = 1.
-      u_sub(i_sub) = u0(i0,ij)
+      u_sub(i_sub,ij) = u0(i0,ij)
     endif
-    if (debug_bounds) then
-      if (method<5 .and.(u_sub(i_sub)<u0_min(i0) .or. u_sub(i_sub)>u0_max(i0))) then
-        write(0,*) 'Sub cell average is out of bounds',i_sub,'method=',method
-        write(0,*) 'xa,xb: ',xa,xb
-        write(0,*) 'Edge values: ',ppoly0_E(i0,:,ij),'mean',u0(i0,ij)
-        write(0,*) 'a_c: ',(u0(i0,ij)-ppoly0_E(i0,1,ij))+(u0(i0,ij)-ppoly0_E(i0,2,ij))
-        write(0,*) 'Polynomial coeffs: ',ppoly0_coefs(i0,:,ij)
-        write(0,*) 'Bounds min=',u0_min(i0),'max=',u0_max(i0)
-        write(0,*) 'Average: ',u_sub(i_sub),'rel to min=',u_sub(i_sub)-u0_min(i0),'rel to max=',u_sub(i_sub)-u0_max(i0)
-        call MOM_error( FATAL, 'MOM_remapping, remap_via_sub_cells: '//&
-             'Sub-cell average is out of bounds!' )
-      endif
-    endif
+!    if (debug_bounds) then
+!      if (method<5 .and.(u_sub(i_sub)<u0_min(i0,ij) .or. u_sub(i_sub)>u0_max(i0,ij))) then
+!        write(0,*) 'Sub cell average is out of bounds',i_sub,'method=',method
+!        write(0,*) 'xa,xb: ',xa,xb
+!        write(0,*) 'Edge values: ',ppoly0_E(i0,:,ij),'mean',u0(i0,ij)
+!        write(0,*) 'a_c: ',(u0(i0,ij)-ppoly0_E(i0,1,ij))+(u0(i0,ij)-ppoly0_E(i0,2,ij))
+!        write(0,*) 'Polynomial coeffs: ',ppoly0_coefs(i0,:,ij)
+!        write(0,*) 'Bounds min=',u0_min(i0,ij),'max=',u0_max(i0,ij)
+!        write(0,*) 'Average: ',u_sub(i_sub),'rel to min=',u_sub(i_sub)-u0_min(i0,ij),'rel to max=',u_sub(i_sub)-u0_max(i0,ij)
+!        call MOM_error( FATAL, 'MOM_remapping, remap_via_sub_cells: '//&
+!             'Sub-cell average is out of bounds!' )
+!      endif
+!    endif
     if (force_bounds_in_subcell) then
       ! These next two lines should not be needed but when using PQM we found roundoff
       ! can lead to overshoots. These lines sweep issues under the rug which need to be
       ! properly .. later. -AJA
-      u_orig = u_sub(i_sub)
-      u_sub(i_sub) = max( u_sub(i_sub), u0_min(i0) )
-      u_sub(i_sub) = min( u_sub(i_sub), u0_max(i0) )
-      u02_err = u02_err + dh*abs( u_sub(i_sub) - u_orig )
+      u_orig = u_sub(i_sub,ij)
+      u_sub(i_sub,ij) = max( u_sub(i_sub,ij), u0_min(i0,ij) )
+      u_sub(i_sub,ij) = min( u_sub(i_sub,ij), u0_max(i0,ij) )
+      u02_err = u02_err + dh*abs( u_sub(i_sub,ij) - u_orig )
     endif
-    uh_sub(i_sub) = dh * u_sub(i_sub)
+    uh_sub(i_sub,ij) = dh * u_sub(i_sub,ij)
 
-    if (isub_src(i_sub+1) /= i0) then
+    if (isub_src(i_sub+1,ij) /= i0) then
       ! If the next sub-cell is in a different source cell, reset the position counters
       dh0_eff = 0.
       xa = 0.
@@ -787,48 +796,62 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       xa = xb ! Next integral will start at end of last
     endif
 
-  enddo
-  u_sub(n0+n1+1) = ppoly0_E(n0,2,ij)                   ! This value is only needed when total target column
-  uh_sub(n0+n1+1) = ppoly0_E(n0,2,ij) * h_sub(n0+n1+1) ! is wider than the source column
+   enddo
+ enddo
+!$acc end parallel
+
+!$acc parallel loop
+ do ij = 1, nij
+  u_sub(n0+n1+1,ij) = ppoly0_E(n0,2,ij)                   ! This value is only needed when total target column
+  uh_sub(n0+n1+1,ij) = ppoly0_E(n0,2,ij) * h_sub(n0+n1+1,ij) ! is wider than the source column
+
+    i0_last_thick_cell = 0
+    do i0 = 1, n0
+      if (h0(i0,ij)>0.) i0_last_thick_cell = i0
+    enddo
 
   if (adjust_thickest_subcell) then
     ! Loop over each source cell substituting the integral/average for the thickest sub-cell (within
     ! the source cell) with the residual of the source cell integral minus the other sub-cell integrals
     ! aka a genius algorithm for accurate conservation when remapping from Robert Hallberg (@Hallberg-NOAA).
     do i0 = 1, i0_last_thick_cell
-      i_max = isrc_max(i0)
-      dh_max = h_sub(i_max)
+      i_max = isrc_max(i0,ij)
+      dh_max = h_sub(i_max,ij)
       if (dh_max > 0.) then
         ! duh will be the sum of sub-cell integrals within the source cell except for the thickest sub-cell.
         duh = 0.
-        do i_sub = isrc_start(i0), isrc_end(i0)
-          if (i_sub /= i_max) duh = duh + uh_sub(i_sub)
+        do i_sub = isrc_start(i0,ij), isrc_end(i0,ij)
+          if (i_sub /= i_max) duh = duh + uh_sub(i_sub,ij)
         enddo
-        uh_sub(i_max) = u0(i0,ij)*h0(i0,ij) - duh
-        u02_err = u02_err + max( abs(uh_sub(i_max)), abs(u0(i0,ij)*h0(i0,ij)), abs(duh) )
+        uh_sub(i_max,ij) = u0(i0,ij)*h0(i0,ij) - duh
+        u02_err = u02_err + max( abs(uh_sub(i_max,ij)), abs(u0(i0,ij)*h0(i0,ij)), abs(duh) )
       endif
     enddo
   endif
+ enddo
+!$acc end parallel
 
+!$acc parallel loop
+ do ij = 1, nij
   ! Loop over each target cell summing the integrals from sub-cells within the target cell.
   uh_err = 0.
   do i1 = 1, n1
     if (h1(i1,ij) > 0.) then
       duh = 0. ; dh = 0.
-      i_sub = itgt_start(i1)
+      i_sub = itgt_start(i1,ij)
       if (force_bounds_in_target) then
-        u1min = u_sub(i_sub)
-        u1max = u_sub(i_sub)
+        u1min = u_sub(i_sub,ij)
+        u1max = u_sub(i_sub,ij)
       endif
-      do i_sub = itgt_start(i1), itgt_end(i1)
+      do i_sub = itgt_start(i1,ij), itgt_end(i1,ij)
         if (force_bounds_in_target) then
-          u1min = min(u1min, u_sub(i_sub))
-          u1max = max(u1max, u_sub(i_sub))
+          u1min = min(u1min, u_sub(i_sub,ij))
+          u1max = max(u1max, u_sub(i_sub,ij))
         endif
-        dh = dh + h_sub(i_sub)
-        duh = duh + uh_sub(i_sub)
+        dh = dh + h_sub(i_sub,ij)
+        duh = duh + uh_sub(i_sub,ij)
         ! This accumulates the contribution to the error bound for the sum of u*h
-        uh_err = uh_err + max(abs(duh),abs(uh_sub(i_sub)))*epsilon(duh)
+        uh_err = uh_err + max(abs(duh),abs(uh_sub(i_sub,ij)))*epsilon(duh)
       enddo
       u1(i1,ij) = duh / dh
       ! This is the contribution from the division to the error bound for the sum of u*h
@@ -840,85 +863,85 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
         uh_err = uh_err + dh*abs( u1(i1,ij)-u_orig )
       endif
     else
-      u1(i1,ij) = u_sub(itgt_start(i1))
+      u1(i1,ij) = u_sub(itgt_start(i1,ij),ij)
     endif
   enddo
 
-  ! Check errors and bounds
-  if (debug_bounds) then
-    call measure_input_bounds( n0, h0, u0, ppoly0_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
-    call measure_output_bounds( n1, h1, u1, h1tot, h1err, u1tot, u1err, u1min, u1max )
-    call measure_output_bounds( n0+n1+1, h_sub, u_sub, h2tot, h2err, u2tot, u2err, u2min, u2max )
-    if (method<5) then ! We except PQM until we've debugged it
-    if (     (abs(u1tot-u0tot)>(u0err+u1err)+uh_err+u02_err .and. abs(h1tot-h0tot)<h0err+h1err) &
-        .or. (abs(u2tot-u0tot)>u0err+u2err+u02_err .and. abs(h2tot-h0tot)<h0err+h2err) &
-        .or. (u1min<u0min .or. u1max>u0max) ) then
-      write(0,*) 'method = ',method
-      write(0,*) 'Source to sub-cells:'
-      write(0,*) 'H: h0tot=',h0tot,'h2tot=',h2tot,'dh=',h2tot-h0tot,'h0err=',h0err,'h2err=',h2err
-      if (abs(h2tot-h0tot)>h0err+h2err) &
-        write(0,*) 'H non-conservation difference=',h2tot-h0tot,'allowed err=',h0err+h2err,' <-----!'
-      write(0,*) 'UH: u0tot=',u0tot,'u2tot=',u2tot,'duh=',u2tot-u0tot,'u0err=',u0err,'u2err=',u2err,&
-                 'adjustment err=',u02_err
-      if (abs(u2tot-u0tot)>u0err+u2err) &
-        write(0,*) 'U non-conservation difference=',u2tot-u0tot,'allowed err=',u0err+u2err,' <-----!'
-      write(0,*) 'Sub-cells to target:'
-      write(0,*) 'H: h2tot=',h2tot,'h1tot=',h1tot,'dh=',h1tot-h2tot,'h2err=',h2err,'h1err=',h1err
-      if (abs(h1tot-h2tot)>h2err+h1err) &
-        write(0,*) 'H non-conservation difference=',h1tot-h2tot,'allowed err=',h2err+h1err,' <-----!'
-      write(0,*) 'UH: u2tot=',u2tot,'u1tot=',u1tot,'duh=',u1tot-u2tot,'u2err=',u2err,'u1err=',u1err,'uh_err=',uh_err
-      if (abs(u1tot-u2tot)>u2err+u1err) &
-        write(0,*) 'U non-conservation difference=',u1tot-u2tot,'allowed err=',u2err+u1err,' <-----!'
-      write(0,*) 'Source to target:'
-      write(0,*) 'H: h0tot=',h0tot,'h1tot=',h1tot,'dh=',h1tot-h0tot,'h0err=',h0err,'h1err=',h1err
-      if (abs(h1tot-h0tot)>h0err+h1err) &
-        write(0,*) 'H non-conservation difference=',h1tot-h0tot,'allowed err=',h0err+h1err,' <-----!'
-      write(0,*) 'UH: u0tot=',u0tot,'u1tot=',u1tot,'duh=',u1tot-u0tot,'u0err=',u0err,'u1err=',u1err,'uh_err=',uh_err
-      if (abs(u1tot-u0tot)>(u0err+u1err)+uh_err) &
-        write(0,*) 'U non-conservation difference=',u1tot-u0tot,'allowed err=',u0err+u1err+uh_err,' <-----!'
-      write(0,*) 'U: u0min=',u0min,'u1min=',u1min,'u2min=',u2min
-      if (u1min<u0min) write(0,*) 'U minimum overshoot=',u1min-u0min,' <-----!'
-      if (u2min<u0min) write(0,*) 'U2 minimum overshoot=',u2min-u0min,' <-----!'
-      write(0,*) 'U: u0max=',u0max,'u1max=',u1max,'u2max=',u2max
-      if (u1max>u0max) write(0,*) 'U maximum overshoot=',u1max-u0max,' <-----!'
-      if (u2max>u0max) write(0,*) 'U2 maximum overshoot=',u2max-u0max,' <-----!'
-      write(0,'(a3,6a24,2a3)') 'k','h0','left edge','u0','right edge','h1','u1','is','ie'
-      do k = 1, max(n0,n1)
-        if (k<=min(n0,n1)) then
-          write(0,'(i3,1p6e24.16,2i3)') k,h0(k,ij),ppoly0_E(k,1,ij),u0(k,ij),ppoly0_E(k,2,ij),h1(k,ij),u1(k,ij),itgt_start(k),itgt_end(k)
-        elseif (k>n0) then
-          write(0,'(i3,96x,1p2e24.16,2i3)') k,h1(k,ij),u1(k,ij),itgt_start(k),itgt_end(k)
-        else
-          write(0,'(i3,1p4e24.16)') k,h0(k,ij),ppoly0_E(k,1,ij),u0(k,ij),ppoly0_E(k,2,ij)
-        endif
-      enddo
-      write(0,'(a3,2a24)') 'k','u0','Polynomial coefficients'
-      do k = 1, n0
-        write(0,'(i3,1p6e24.16)') k,u0(k,ij),ppoly0_coefs(k,:,ij)
-      enddo
-      write(0,'(a3,3a24,a3,2a24)') 'k','Sub-cell h','Sub-cell u','Sub-cell hu','i0','xa','xb'
-      xa = 0.
-      dh0_eff = 0.
-      do k = 1, n0+n1+1
-        dh = h_sub(k)
-        i0 = isub_src(k)
-        dh0_eff = dh0_eff + dh ! Cumulative thickness within the source cell
-        xb = dh0_eff / h0_eff(i0) ! This expression yields xa <= xb <= 1.0
-        xb = min(1., xb) ! This is only needed when the total target column is wider than the source column
-        write(0,'(i3,1p3e24.16,i3,1p2e24.16)') k,h_sub(k),u_sub(k),uh_sub(k),i0,xa,xb
-        if (k<=n0+n1) then
-          if (isub_src(k+1) /= i0) then
-            dh0_eff = 0.; xa = 0.
-          else
-            xa = xb
-          endif
-        endif
-      enddo
-      call MOM_error( FATAL, 'MOM_remapping, remap_via_sub_cells: '//&
-             'Remapping result is inconsistent!' )
-    endif
-    endif ! method<5
-  endif ! debug_bounds
+!  ! Check errors and bounds
+!  if (debug_bounds) then
+!    call measure_input_bounds( n0, h0, u0, ppoly0_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
+!    call measure_output_bounds( n1, h1, u1, h1tot, h1err, u1tot, u1err, u1min, u1max )
+!    call measure_output_bounds( n0+n1+1, h_sub, u_sub, h2tot, h2err, u2tot, u2err, u2min, u2max )
+!    if (method<5) then ! We except PQM until we've debugged it
+!    if (     (abs(u1tot-u0tot)>(u0err+u1err)+uh_err+u02_err .and. abs(h1tot-h0tot)<h0err+h1err) &
+!        .or. (abs(u2tot-u0tot)>u0err+u2err+u02_err .and. abs(h2tot-h0tot)<h0err+h2err) &
+!        .or. (u1min<u0min .or. u1max>u0max) ) then
+!      write(0,*) 'method = ',method
+!      write(0,*) 'Source to sub-cells:'
+!      write(0,*) 'H: h0tot=',h0tot,'h2tot=',h2tot,'dh=',h2tot-h0tot,'h0err=',h0err,'h2err=',h2err
+!      if (abs(h2tot-h0tot)>h0err+h2err) &
+!        write(0,*) 'H non-conservation difference=',h2tot-h0tot,'allowed err=',h0err+h2err,' <-----!'
+!      write(0,*) 'UH: u0tot=',u0tot,'u2tot=',u2tot,'duh=',u2tot-u0tot,'u0err=',u0err,'u2err=',u2err,&
+!                 'adjustment err=',u02_err
+!      if (abs(u2tot-u0tot)>u0err+u2err) &
+!        write(0,*) 'U non-conservation difference=',u2tot-u0tot,'allowed err=',u0err+u2err,' <-----!'
+!      write(0,*) 'Sub-cells to target:'
+!      write(0,*) 'H: h2tot=',h2tot,'h1tot=',h1tot,'dh=',h1tot-h2tot,'h2err=',h2err,'h1err=',h1err
+!      if (abs(h1tot-h2tot)>h2err+h1err) &
+!        write(0,*) 'H non-conservation difference=',h1tot-h2tot,'allowed err=',h2err+h1err,' <-----!'
+!      write(0,*) 'UH: u2tot=',u2tot,'u1tot=',u1tot,'duh=',u1tot-u2tot,'u2err=',u2err,'u1err=',u1err,'uh_err=',uh_err
+!      if (abs(u1tot-u2tot)>u2err+u1err) &
+!        write(0,*) 'U non-conservation difference=',u1tot-u2tot,'allowed err=',u2err+u1err,' <-----!'
+!      write(0,*) 'Source to target:'
+!      write(0,*) 'H: h0tot=',h0tot,'h1tot=',h1tot,'dh=',h1tot-h0tot,'h0err=',h0err,'h1err=',h1err
+!      if (abs(h1tot-h0tot)>h0err+h1err) &
+!        write(0,*) 'H non-conservation difference=',h1tot-h0tot,'allowed err=',h0err+h1err,' <-----!'
+!      write(0,*) 'UH: u0tot=',u0tot,'u1tot=',u1tot,'duh=',u1tot-u0tot,'u0err=',u0err,'u1err=',u1err,'uh_err=',uh_err
+!      if (abs(u1tot-u0tot)>(u0err+u1err)+uh_err) &
+!        write(0,*) 'U non-conservation difference=',u1tot-u0tot,'allowed err=',u0err+u1err+uh_err,' <-----!'
+!      write(0,*) 'U: u0min=',u0min,'u1min=',u1min,'u2min=',u2min
+!      if (u1min<u0min) write(0,*) 'U minimum overshoot=',u1min-u0min,' <-----!'
+!      if (u2min<u0min) write(0,*) 'U2 minimum overshoot=',u2min-u0min,' <-----!'
+!      write(0,*) 'U: u0max=',u0max,'u1max=',u1max,'u2max=',u2max
+!      if (u1max>u0max) write(0,*) 'U maximum overshoot=',u1max-u0max,' <-----!'
+!      if (u2max>u0max) write(0,*) 'U2 maximum overshoot=',u2max-u0max,' <-----!'
+!      write(0,'(a3,6a24,2a3)') 'k','h0','left edge','u0','right edge','h1','u1','is','ie'
+!      do k = 1, max(n0,n1)
+!        if (k<=min(n0,n1)) then
+!          write(0,'(i3,1p6e24.16,2i3)') k,h0(k,ij),ppoly0_E(k,1,ij),u0(k,ij),ppoly0_E(k,2,ij),h1(k,ij),u1(k,ij),itgt_start(k),itgt_end(k)
+!        elseif (k>n0) then
+!          write(0,'(i3,96x,1p2e24.16,2i3)') k,h1(k,ij),u1(k,ij),itgt_start(k),itgt_end(k)
+!        else
+!          write(0,'(i3,1p4e24.16)') k,h0(k,ij),ppoly0_E(k,1,ij),u0(k,ij),ppoly0_E(k,2,ij)
+!        endif
+!      enddo
+!      write(0,'(a3,2a24)') 'k','u0','Polynomial coefficients'
+!      do k = 1, n0
+!        write(0,'(i3,1p6e24.16)') k,u0(k,ij),ppoly0_coefs(k,:,ij)
+!      enddo
+!      write(0,'(a3,3a24,a3,2a24)') 'k','Sub-cell h','Sub-cell u','Sub-cell hu','i0','xa','xb'
+!      xa = 0.
+!      dh0_eff = 0.
+!      do k = 1, n0+n1+1
+!        dh = h_sub(k,ij)
+!        i0 = isub_src(k)
+!        dh0_eff = dh0_eff + dh ! Cumulative thickness within the source cell
+!        xb = dh0_eff / h0_eff(i0) ! This expression yields xa <= xb <= 1.0
+!        xb = min(1., xb) ! This is only needed when the total target column is wider than the source column
+!        write(0,'(i3,1p3e24.16,i3,1p2e24.16)') k,h_sub(k,ij),u_sub(k),uh_sub(k),i0,xa,xb
+!        if (k<=n0+n1) then
+!          if (isub_src(k+1) /= i0) then
+!            dh0_eff = 0.; xa = 0.
+!          else
+!            xa = xb
+!          endif
+!        endif
+!      enddo
+!      call MOM_error( FATAL, 'MOM_remapping, remap_via_sub_cells: '//&
+!             'Remapping result is inconsistent!' )
+!    endif
+!    endif ! method<5
+!  endif ! debug_bounds
 
   ! Include the error remapping from source to sub-cells in the estimate of total remapping error
   uh_err = uh_err + u02_err
