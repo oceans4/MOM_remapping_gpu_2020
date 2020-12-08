@@ -215,13 +215,14 @@ subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neg
   hNeglect_edge = 1.0e-10 ; if (present(h_neglect_edge)) hNeglect_edge = h_neglect_edge
 
   do j = 1, nj ; do i = 1, ni
-    lh0(:) = h0(:,ni,nj)
-    lu0(:) = u0(:,ni,nj)
+    lh0(:) = h0(:,i,j)
+    lu0(:) = u0(:,i,j)
+
     call build_reconstructions_1d(CS, n0, lh0, lu0, lC, lE, lS, iMethod, &
                                   hNeglect, hNeglect_edge)
-    ppoly_r_E(:,:,ni,nj) = lE(:,:)
-    ppoly_r_S(:,:,ni,nj) = lS(:,:)
-    ppoly_r_coefs(:,:,ni,nj) = lC(:,:)
+    ppoly_r_E(:,:,i,j) = lE(:,:)
+    ppoly_r_S(:,:,i,j) = lS(:,:)
+    ppoly_r_coefs(:,:,i,j) = lC(:,:)
 
 #ifndef _OPENACC
     if (CS%check_reconstruction) call check_reconstructions_1d(n0, lh0, lu0, CS%degree, &
