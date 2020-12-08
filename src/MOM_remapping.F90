@@ -561,10 +561,6 @@ subroutine remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, n1, h1, meth
   logical,           intent(in)    :: force_bounds_in_subcell !< Force sub-cell values to be bounded
   real,              intent(out)   :: u1(n1)  !< Target cell averages (size n1)
   real,              intent(out)   :: uh_err !< Estimate of bound on error in sum of u*h
-  real, optional,    intent(out)   :: ah_sub(n0+n1+1) !< h_sub
-  integer, optional, intent(out)   :: aisub_src(n0+n1+1) !< i_sub_src
-  integer, optional, intent(out)   :: aiss(n0) !< isrc_start
-  integer, optional, intent(out)   :: aise(n0) !< isrc_ens
   ! Local variables
   integer :: i_sub ! Index of sub-cell
   integer :: i0 ! Index into h0(1:n0), source column
@@ -927,11 +923,6 @@ subroutine remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, n1, h1, meth
 
   ! Include the error remapping from source to sub-cells in the estimate of total remapping error
   uh_err = uh_err + u02_err
-
-  if (present(ah_sub)) ah_sub(1:n0+n1+1) = h_sub(1:n0+n1+1)
-  if (present(aisub_src)) aisub_src(1:n0+n1+1) = isub_src(1:n0+n1+1)
-  if (present(aiss)) aiss(1:n0) = isrc_start(1:n0)
-  if (present(aise)) aise(1:n0) = isrc_end(1:n0)
 
 end subroutine remap_via_sub_cells
 
