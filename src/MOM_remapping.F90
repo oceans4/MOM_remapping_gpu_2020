@@ -897,7 +897,8 @@ subroutine remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly0_E, nP, ppoly0_coefs, n
       write(0,'(a3,6a24,2a3)') 'k','h0','left edge','u0','right edge','h1','u1','is','ie'
       do k = 1, max(n0,n1)
         if (k<=min(n0,n1)) then
-          write(0,'(i3,1p6e24.16,2i3)') k,h0(i,j,k),ppoly0_E(i,j,k,1),u0(i,j,k),ppoly0_E(i,j,k,2),h1(i,j,k),u1(i,j,k),itgt_start(k),itgt_end(k)
+          write(0,'(i3,1p6e24.16,2i3)') k,h0(i,j,k),ppoly0_E(i,j,k,1),u0(i,j,k), &
+                  ppoly0_E(i,j,k,2),h1(i,j,k),u1(i,j,k),itgt_start(k),itgt_end(k)
         elseif (k>n0) then
           write(0,'(i3,96x,1p2e24.16,2i3)') k,h1(i,j,k),u1(i,j,k),itgt_start(k),itgt_end(k)
         else
