@@ -41,7 +41,7 @@ end type
 ! The following routines are visible to the outside world
 public remapping_core_h
 #ifndef _OPENACC
-!public remapping_core_w
+public remapping_core_w
 #endif
 public initialize_remapping, end_remapping, remapping_set_param, extract_member_remapping_CS
 public remapping_unit_tests, build_reconstructions_1d, average_value_ppoly
@@ -82,10 +82,6 @@ real, parameter :: hNeglect_dflt = 1.E-30 !< A thickness [H ~> m or kg m-2] that
                                       !! added to thicknesses in a denominator without
                                       !! changing the numerical result, except where
                                       !! a division by zero would otherwise occur.
-
-logical, parameter :: old_algorithm = .false. !< Use the old "broken" algorithm.
-                                              !! This is a temporary measure to assist
-                                              !! debugging until we delete the old algorithm.
 
 contains
 
@@ -191,8 +187,8 @@ end function isPosSumErrSignificant
 !> Remaps column of values u0 on grid h0 to grid h1 assuming the top edge is aligned.
 subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
   type(remapping_CS),        intent(in)  :: CS !< Remapping control structure
-  integer,                   intent(in)  :: ni !< Tile width
-  integer,                   intent(in)  :: nj !< Tile height
+  integer,                   intent(in)  :: ni !< Number of columns in i-direction
+  integer,                   intent(in)  :: nj !< Number of columns in j-direction
   integer,                   intent(in)  :: n0 !< Number of cells in vertical on source grid
   real, dimension(ni,nj,n0), intent(in)  :: h0 !< Cell widths on source grid
   real, dimension(ni,nj,n0), intent(in)  :: u0 !< Cell averages on source grid
@@ -213,40 +209,37 @@ subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neg
   integer :: i, j, k
   real :: eps, h0tot, h0err, h1tot, h1err, u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, uh_err
   real :: hNeglect, hNeglect_edge
+  real :: lh0(n0), lu0(n0), lh1(n1), lu1(n1), lE(n0,2), lS(n0,2), lC(n0,CS%degree+1)
 
   hNeglect = 1.0e-30 ; if (present(h_neglect)) hNeglect = h_neglect
   hNeglect_edge = 1.0e-10 ; if (present(h_neglect_edge)) hNeglect_edge = h_neglect_edge
 
-!$acc parallel loop collapse(2)
   do j = 1, nj
     do i = 1, ni
-      call build_reconstructions_1d(CS, n0, h0(i,j,:), u0(i,j,:), &
-                                    ppoly_r_coefs(i,j,:,:), ppoly_r_E(i,j,:,:), ppoly_r_S(i,j,:,:), iMethod, &
+      lh0(:) = h0(i,j,:)
+      lu0(:) = u0(i,j,:)
+      call build_reconstructions_1d(CS, n0, lh0, lu0, lC, lE, lS, iMethod, &
                                     hNeglect, hNeglect_edge)
-    enddo
-  enddo
-!$acc end parallel
+      ppoly_r_coefs(i,j,:,:) = lC(:,:)
+      ppoly_r_E(i,j,:,:) = lE(:,:)
 
 #ifndef _OPENACC
-  if (CS%check_reconstruction) call check_reconstructions_1d(n0, h0(i,j,:), u0(i,j,:), CS%degree, &
-                                   CS%boundary_extrapolation, ppoly_r_coefs(i,j,:,:), ppoly_r_E(i,j,:,:), ppoly_r_S(i,j,:,:))
+      if (CS%check_reconstruction) call check_reconstructions_1d(n0, lh0, lu0, CS%degree, &
+                                       CS%boundary_extrapolation, lC, lE, lS)
 #endif
-
-!$acc parallel loop collapse(2)
-  do j = 1, nj
-    do i = 1, ni
-      call remap_via_sub_cells(n0, h0(i,j,:), u0(i,j,:), CS%degree, ppoly_r_E(i,j,:,:), ppoly_r_coefs(i,j,:,:), &
-                               n1, h1(i,j,:), iMethod, &
-                               CS%force_bounds_in_subcell, u1(i,j,:), uh_err )
     enddo
   enddo
-!$acc end parallel
 
-#ifdef X_OPENACCX
+  call remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
+                           CS%force_bounds_in_subcell, u1, uh_err)
+
+#ifndef _OPENACC
   if (CS%check_remapping) then
+  do j = 1, nj
+    do i = 1, ni
     ! Check errors and bounds
-    call measure_input_bounds( n0, h0, u0, ppoly_r_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
-    call measure_output_bounds( n1, h1, u1, h1tot, h1err, u1tot, u1err, u1min, u1max )
+    call measure_input_bounds( n0, h0(i,j,:), u0(i,j,:), ppoly_r_E(i,j,:,:), h0tot, h0err, u0tot, u0err, u0min, u0max )
+    call measure_output_bounds( n1, h1(i,j,:), u1(i,j,:), h1tot, h1err, u1tot, u1err, u1min, u1max )
     if (iMethod<5) then ! We except PQM until we've debugged it
     if ( (abs(u1tot-u0tot)>(u0err+u1err)+uh_err .and. abs(h1tot-h0tot)<h0err+h1err) &
         .or. (u1min<u0min .or. u1max>u0max) ) then
@@ -264,27 +257,29 @@ subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neg
       write(0,'(a3,6a24)') 'k','h0','left edge','u0','right edge','h1','u1'
       do k = 1, max(n0,n1)
         if (k<=min(n0,n1)) then
-          write(0,'(i3,1p6e24.16)') k,h0(k),ppoly_r_E(k,1),u0(k),ppoly_r_E(k,2),h1(k),u1(k)
+          write(0,'(i3,1p6e24.16)') k,h0(i,j,k),ppoly_r_E(i,j,k,1),u0(i,j,k),ppoly_r_E(i,j,k,2),h1(i,j,k),u1(i,j,k)
         elseif (k>n0) then
-          write(0,'(i3,96x,1p2e24.16)') k,h1(k),u1(k)
+          write(0,'(i3,96x,1p2e24.16)') k,h1(i,j,k),u1(i,j,k)
         else
-          write(0,'(i3,1p4e24.16)') k,h0(k),ppoly_r_E(k,1),u0(k),ppoly_r_E(k,2)
+          write(0,'(i3,1p4e24.16)') k,h0(i,j,k),ppoly_r_E(i,j,k,1),u0(i,j,k),ppoly_r_E(i,j,k,2)
         endif
       enddo
       write(0,'(a3,2a24)') 'k','u0','Polynomial coefficients'
       do k = 1, n0
-        write(0,'(i3,1p6e24.16)') k,u0(k),ppoly_r_coefs(k,:)
+        write(0,'(i3,1p6e24.16)') k,u0(i,j,k),ppoly_r_coefs(i,j,k,:)
       enddo
       call MOM_error( FATAL, 'MOM_remapping, remapping_core_h: '//&
              'Remapping result is inconsistent!' )
     endif
     endif ! method<5
+    enddo
+  enddo
   endif
 #endif
 
 end subroutine remapping_core_h
 
-#ifdef X_OPENACCX
+#ifndef _OPENACC
 !> Remaps column of values u0 on grid h0 to implied grid h1
 !! where the interfaces of h1 differ from those of h0 by dx.
 subroutine remapping_core_w( CS, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_edge )
@@ -331,7 +326,7 @@ subroutine remapping_core_w( CS, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_ed
       h1(k) = max( 0., dx(k+1) - dx(k) )
     endif
   enddo
-  call remap_via_sub_cells( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, n1, h1, iMethod, &
+  call remap_via_sub_cells(1, 1, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
                             CS%force_bounds_in_subcell,u1, uh_err )
 ! call remapByDeltaZ( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, n1, dx, iMethod, u1, hNeglect )
 ! call remapByProjection( n0, h0, u0, CS%ppoly_r, n1, h1, iMethod, u1, hNeglect )
@@ -546,25 +541,22 @@ end subroutine check_reconstructions_1d
 !> Remaps column of n0 values u0 on grid h0 to grid h1 with n1 cells by calculating
 !! the n0+n1+1 sub-integrals of the intersection of h0 and h1, and the summing the
 !! appropriate integrals into the h1*u1 values.  h0 and h1 must have the same units.
-subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, method, &
-                                force_bounds_in_subcell, u1, uh_err, ah_sub, aisub_src, aiss, aise )
-!$acc routine seq
-  integer,           intent(in)    :: n0     !< Number of cells in source grid
-  real,              intent(in)    :: h0(n0)  !< Source grid widths (size n0)
-  real,              intent(in)    :: u0(n0)  !< Source cell averages (size n0)
-  integer,           intent(in)    :: np     !< Order of reconstruction
-  real,              intent(in)    :: ppoly0_E(n0,2)            !< Edge value of polynomial
-  real,              intent(in)    :: ppoly0_coefs(n0,np) !< Coefficients of polynomial
-  integer,           intent(in)    :: n1     !< Number of cells in target grid
-  real,              intent(in)    :: h1(n1)  !< Target grid widths (size n1)
-  integer,           intent(in)    :: method !< Remapping scheme to use
-  logical,           intent(in)    :: force_bounds_in_subcell !< Force sub-cell values to be bounded
-  real,              intent(out)   :: u1(n1)  !< Target cell averages (size n1)
-  real,              intent(out)   :: uh_err !< Estimate of bound on error in sum of u*h
-  real, optional,    intent(out)   :: ah_sub(n0+n1+1) !< h_sub
-  integer, optional, intent(out)   :: aisub_src(n0+n1+1) !< i_sub_src
-  integer, optional, intent(out)   :: aiss(n0) !< isrc_start
-  integer, optional, intent(out)   :: aise(n0) !< isrc_ens
+subroutine remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly0_E, nP, ppoly0_coefs, n1, h1, method, &
+                               force_bounds_in_subcell, u1, uh_err)
+  integer, intent(in)    :: ni     !< Number of columns in i-direction
+  integer, intent(in)    :: nj     !< Number of columns in j-direction
+  integer, intent(in)    :: n0     !< Number of cells in vertical on source grid
+  real,    intent(in)    :: h0(ni,nj,n0)  !< Source grid widths (size n0)
+  real,    intent(in)    :: u0(ni,nj,n0)  !< Source cell averages (size n0)
+  real,    intent(in)    :: ppoly0_E(ni,nj,n0,2)            !< Edge value of polynomial
+  integer, intent(in)    :: nP     !< Degree + 1 of polynomial
+  real,    intent(in)    :: ppoly0_coefs(ni,nj,n0,nP) !< Coefficients of polynomial
+  integer, intent(in)    :: n1     !< Number of cells in vertical on target grid
+  real,    intent(in)    :: h1(ni,nj,n1)  !< Target grid widths (size n1)
+  integer, intent(in)    :: method !< Remapping scheme to use
+  logical, intent(in)    :: force_bounds_in_subcell !< Force sub-cell values to be bounded
+  real,    intent(out)   :: u1(ni,nj,n1)  !< Target cell averages (size n1)
+  real,    intent(out)   :: uh_err !< Estimate of bound on error in sum of u*h
   ! Local variables
   integer :: i_sub ! Index of sub-cell
   integer :: i0 ! Index into h0(1:n0), source column
@@ -599,19 +591,29 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
   real :: u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, u2tot, u2err, u2min, u2max, u_orig
   logical :: src_has_volume !< True if h0 has not been consumed
   logical :: tgt_has_volume !< True if h1 has not been consumed
+  integer :: i, j
+  real :: lu0(n0), lpE(n0,2), lpC(n0,nP)
 
-  if (old_algorithm) isrc_max(:)=1
+!$acc parallel loop &
+!$acc collapse(2) &
+!$acc private( &
+!$acc   h_sub, uh_sub, u_sub, isub_src, isrc_start, isrc_end, isrc_max, &
+!$acc   h0_eff, u0_min, u0_max, itgt_start, itgt_end, &
+!$acc   lu0, lpE, lpC &
+!$acc )
+  do j = 1, nj
+    do i = 1, ni
 
   i0_last_thick_cell = 0
   do i0 = 1, n0
-    u0_min(i0) = min(ppoly0_E(i0,1), ppoly0_E(i0,2))
-    u0_max(i0) = max(ppoly0_E(i0,1), ppoly0_E(i0,2))
-    if (h0(i0)>0.) i0_last_thick_cell = i0
+    u0_min(i0) = min(ppoly0_E(i,j,i0,1), ppoly0_E(i,j,i0,2))
+    u0_max(i0) = max(ppoly0_E(i,j,i0,1), ppoly0_E(i,j,i0,2))
+    if (h0(i,j,i0)>0.) i0_last_thick_cell = i0
   enddo
 
   ! Initialize algorithm
-  h0_supply = h0(1)
-  h1_supply = h1(1)
+  h0_supply = h0(i,j,1)
+  h1_supply = h1(i,j,1)
   src_has_volume = .true.
   tgt_has_volume = .true.
   i0 = 1 ; i1 = 1
@@ -669,28 +671,13 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
       ! Record the source cell thickness found by summing the sub-cell thicknesses.
       h0_eff(i0) = dh0_eff
       ! Move the source index.
-      if (old_algorithm) then
-        if (i0 < i0_last_thick_cell) then
-          i0 = i0 + 1
-          h0_supply = h0(i0)
-          dh0_eff = 0.
-          do while (h0_supply==0. .and. i0<i0_last_thick_cell)
-            ! This loop skips over vanished source cells
-            i0 = i0 + 1
-            h0_supply = h0(i0)
-          enddo
-        else
-          h0_supply = 1.E30
-        endif
+      if (i0 < n0) then
+        i0 = i0 + 1
+        h0_supply = h0(i,j,i0)
+        dh0_eff = 0.
       else
-        if (i0 < n0) then
-          i0 = i0 + 1
-          h0_supply = h0(i0)
-          dh0_eff = 0.
-        else
-          h0_supply = 0.
-          src_has_volume = .false.
-        endif
+        h0_supply = 0.
+        src_has_volume = .false.
       endif
     elseif (h0_supply >= h1_supply .and. tgt_has_volume) then
       ! h1_supply is smaller than h0_supply) so we consume h1_supply and increment the
@@ -704,14 +691,10 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
       ! Move the target index.
       if (i1 < n1) then
         i1 = i1 + 1
-        h1_supply = h1(i1)
+        h1_supply = h1(i,j,i1)
       else
-        if (old_algorithm) then
-          h1_supply = 1.E30
-        else
-          h1_supply = 0.
-          tgt_has_volume = .false.
-        endif
+        h1_supply = 0.
+        tgt_has_volume = .false.
       endif
     elseif (src_has_volume) then
       ! We ran out of target volume but still have source cells to consume
@@ -728,7 +711,7 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
       h0_eff(i0) = dh0_eff
       if (i0 < n0) then
         i0 = i0 + 1
-        h0_supply = h0(i0)
+        h0_supply = h0(i,j,i0)
         dh0_eff = 0.
       else
         h0_supply = 0.
@@ -744,7 +727,7 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
       ! Move the target index.
       if (i1 < n1) then
         i1 = i1 + 1
-        h1_supply = h1(i1)
+        h1_supply = h1(i,j,i1)
       else
         h1_supply = 0.
         tgt_has_volume = .false.
@@ -759,7 +742,7 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
   xa = 0.
   dh0_eff = 0.
   uh_sub(1) = 0.
-  u_sub(1) = ppoly0_E(1,1)
+  u_sub(1) = ppoly0_E(i,j,1,1)
   u02_err = 0.
   do i_sub = 2, n0+n1
 
@@ -776,18 +759,21 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
     if (h0_eff(i0)>0.) then
       xb = dh0_eff / h0_eff(i0) ! This expression yields xa <= xb <= 1.0
       xb = min(1., xb) ! This is only needed when the total target column is wider than the source column
-      u_sub(i_sub) = average_value_ppoly( n0, u0, ppoly0_E, ppoly0_coefs, method, i0, xa, xb)
+      lu0(:) = u0(i,j,:)
+      lpE(:,:) = ppoly0_E(i,j,:,:)
+      lpC(:,:) = ppoly0_coefs(i,j,:,:)
+      u_sub(i_sub) = average_value_ppoly( n0, lu0, lpE, lpC, method, i0, xa, xb)
     else ! Vanished cell
       xb = 1.
-      u_sub(i_sub) = u0(i0)
+      u_sub(i_sub) = u0(i,j,i0)
     endif
     if (debug_bounds) then
       if (method<5 .and.(u_sub(i_sub)<u0_min(i0) .or. u_sub(i_sub)>u0_max(i0))) then
         write(0,*) 'Sub cell average is out of bounds',i_sub,'method=',method
         write(0,*) 'xa,xb: ',xa,xb
-        write(0,*) 'Edge values: ',ppoly0_E(i0,:),'mean',u0(i0)
-        write(0,*) 'a_c: ',(u0(i0)-ppoly0_E(i0,1))+(u0(i0)-ppoly0_E(i0,2))
-        write(0,*) 'Polynomial coeffs: ',ppoly0_coefs(i0,:)
+        write(0,*) 'Edge values: ',ppoly0_E(i,j,i0,:),'mean',u0(i,j,i0)
+        write(0,*) 'a_c: ',(u0(i,j,i0)-ppoly0_E(i,j,i0,1))+(u0(i,j,i0)-ppoly0_E(i,j,i0,2))
+        write(0,*) 'Polynomial coeffs: ',ppoly0_coefs(i,j,i0,:)
         write(0,*) 'Bounds min=',u0_min(i0),'max=',u0_max(i0)
         write(0,*) 'Average: ',u_sub(i_sub),'rel to min=',u_sub(i_sub)-u0_min(i0),'rel to max=',u_sub(i_sub)-u0_max(i0)
         call MOM_error( FATAL, 'MOM_remapping, remap_via_sub_cells: '//&
@@ -814,8 +800,8 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
     endif
 
   enddo
-  u_sub(n0+n1+1) = ppoly0_E(n0,2)                   ! This value is only needed when total target column
-  uh_sub(n0+n1+1) = ppoly0_E(n0,2) * h_sub(n0+n1+1) ! is wider than the source column
+  u_sub(n0+n1+1) = ppoly0_E(i,j,n0,2)                   ! This value is only needed when total target column
+  uh_sub(n0+n1+1) = ppoly0_E(i,j,n0,2) * h_sub(n0+n1+1) ! is wider than the source column
 
   if (adjust_thickest_subcell) then
     ! Loop over each source cell substituting the integral/average for the thickest sub-cell (within
@@ -830,8 +816,8 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
         do i_sub = isrc_start(i0), isrc_end(i0)
           if (i_sub /= i_max) duh = duh + uh_sub(i_sub)
         enddo
-        uh_sub(i_max) = u0(i0)*h0(i0) - duh
-        u02_err = u02_err + max( abs(uh_sub(i_max)), abs(u0(i0)*h0(i0)), abs(duh) )
+        uh_sub(i_max) = u0(i,j,i0)*h0(i,j,i0) - duh
+        u02_err = u02_err + max( abs(uh_sub(i_max)), abs(u0(i,j,i0)*h0(i,j,i0)), abs(duh) )
       endif
     enddo
   endif
@@ -839,7 +825,7 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
   ! Loop over each target cell summing the integrals from sub-cells within the target cell.
   uh_err = 0.
   do i1 = 1, n1
-    if (h1(i1) > 0.) then
+    if (h1(i,j,i1) > 0.) then
       duh = 0. ; dh = 0.
       i_sub = itgt_start(i1)
       if (force_bounds_in_target) then
@@ -856,17 +842,17 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
         ! This accumulates the contribution to the error bound for the sum of u*h
         uh_err = uh_err + max(abs(duh),abs(uh_sub(i_sub)))*epsilon(duh)
       enddo
-      u1(i1) = duh / dh
+      u1(i,j,i1) = duh / dh
       ! This is the contribution from the division to the error bound for the sum of u*h
       uh_err = uh_err + abs(duh)*epsilon(duh)
       if (force_bounds_in_target) then
-        u_orig = u1(i1)
-        u1(i1) = max(u1min, min(u1max, u1(i1)))
+        u_orig = u1(i,j,i1)
+        u1(i,j,i1) = max(u1min, min(u1max, u1(i,j,i1)))
         ! Adjusting to be bounded contributes to the error for the sum of u*h
-        uh_err = uh_err + dh*abs( u1(i1)-u_orig )
+        uh_err = uh_err + dh*abs( u1(i,j,i1)-u_orig )
       endif
     else
-      u1(i1) = u_sub(itgt_start(i1))
+      u1(i,j,i1) = u_sub(itgt_start(i1))
     endif
   enddo
 
@@ -911,16 +897,16 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
       write(0,'(a3,6a24,2a3)') 'k','h0','left edge','u0','right edge','h1','u1','is','ie'
       do k = 1, max(n0,n1)
         if (k<=min(n0,n1)) then
-          write(0,'(i3,1p6e24.16,2i3)') k,h0(k),ppoly0_E(k,1),u0(k),ppoly0_E(k,2),h1(k),u1(k),itgt_start(k),itgt_end(k)
+          write(0,'(i3,1p6e24.16,2i3)') k,h0(i,j,k),ppoly0_E(i,j,k,1),u0(i,j,k),ppoly0_E(i,j,k,2),h1(i,j,k),u1(i,j,k),itgt_start(k),itgt_end(k)
         elseif (k>n0) then
-          write(0,'(i3,96x,1p2e24.16,2i3)') k,h1(k),u1(k),itgt_start(k),itgt_end(k)
+          write(0,'(i3,96x,1p2e24.16,2i3)') k,h1(i,j,k),u1(i,j,k),itgt_start(k),itgt_end(k)
         else
-          write(0,'(i3,1p4e24.16)') k,h0(k),ppoly0_E(k,1),u0(k),ppoly0_E(k,2)
+          write(0,'(i3,1p4e24.16)') k,h0(i,j,k),ppoly0_E(i,j,k,1),u0(i,j,k),ppoly0_E(i,j,k,2)
         endif
       enddo
       write(0,'(a3,2a24)') 'k','u0','Polynomial coefficients'
       do k = 1, n0
-        write(0,'(i3,1p6e24.16)') k,u0(k),ppoly0_coefs(k,:)
+        write(0,'(i3,1p6e24.16)') k,u0(i,j,k),ppoly0_coefs(i,j,k,:)
       enddo
       write(0,'(a3,3a24,a3,2a24)') 'k','Sub-cell h','Sub-cell u','Sub-cell hu','i0','xa','xb'
       xa = 0.
@@ -949,10 +935,9 @@ subroutine remap_via_sub_cells( n0, h0, u0, np, ppoly0_E, ppoly0_coefs, n1, h1, 
   ! Include the error remapping from source to sub-cells in the estimate of total remapping error
   uh_err = uh_err + u02_err
 
-  if (present(ah_sub)) ah_sub(1:n0+n1+1) = h_sub(1:n0+n1+1)
-  if (present(aisub_src)) aisub_src(1:n0+n1+1) = isub_src(1:n0+n1+1)
-  if (present(aiss)) aiss(1:n0) = isrc_start(1:n0)
-  if (present(aise)) aise(1:n0) = isrc_end(1:n0)
+    enddo
+  enddo
+!$acc end parallel
 
 end subroutine remap_via_sub_cells
 
@@ -1665,309 +1650,309 @@ end subroutine end_remapping
 !! Returns True if a test fails, otherwise False
 logical function remapping_unit_tests(verbose)
   logical, intent(in) :: verbose !< If true, write results to stdout
-!  ! Local variables
-!  integer, parameter :: n0 = 4, n1 = 3, n2 = 6
-!  real :: h0(n0), x0(n0+1), u0(n0)
-!  real :: h1(n1), x1(n1+1), u1(n1), hn1(n1), dx1(n1+1)
-!  real :: h2(n2), x2(n2+1), u2(n2), hn2(n2), dx2(n2+1)
-!  data u0 /9., 3., -3., -9./   ! Linear profile, 4 at surface to -4 at bottom
-!  data h0 /4*0.75/ ! 4 uniform layers with total depth of 3
-!  data h1 /3*1./   ! 3 uniform layers with total depth of 3
-!  data h2 /6*0.5/  ! 6 uniform layers with total depth of 3
-!  type(remapping_CS) :: CS !< Remapping control structure
-!  real, allocatable, dimension(:,:) :: edges, poly_cfs
-!  logical :: answers_2018 !  If true use older, less acccurate expressions.
-!  integer :: i
-!  real :: err, h_neglect, h_neglect_edge
-!  logical :: thisTest, v
-!  logical :: CW84 ! indicate to use Colella and Woodward, 1984
-!
-!  v = verbose
-!  answers_2018 = .false. ! .true.
-!  h_neglect = hNeglect_dflt
-!  h_neglect_edge = hNeglect_dflt ; if (answers_2018) h_neglect_edge = 1.0e-10
-!
-!  write(*,*) '==== MOM_remapping: remapping_unit_tests ================='
-!  remapping_unit_tests = .false. ! Normally return false
-!
-!  thisTest = .false.
-!  call buildGridFromH(n0, h0, x0)
-!  do i=1,n0+1
-!    err=x0(i)-0.75*real(i-1)
-!    if (abs(err)>real(i-1)*epsilon(err)) thisTest = .true.
-!  enddo
-!  if (thisTest) write(*,*) 'remapping_unit_tests: Failed buildGridFromH() 1'
-!  remapping_unit_tests = remapping_unit_tests .or. thisTest
-!  call buildGridFromH(n1, h1, x1)
-!  do i=1,n1+1
-!    err=x1(i)-real(i-1)
-!    if (abs(err)>real(i-1)*epsilon(err)) thisTest = .true.
-!  enddo
-!  if (thisTest) write(*,*) 'remapping_unit_tests: Failed buildGridFromH() 2'
-!  remapping_unit_tests = remapping_unit_tests .or. thisTest
-!
-!  thisTest = .false.
-!  call initialize_remapping(CS, 'PPM_H4', answers_2018=answers_2018)
-!  if (verbose) write(*,*) 'h0 (test data)'
-!  if (verbose) call dumpGrid(n0,h0,x0,u0)
-!
-!#ifndef _OPENACC
-!  call dzFromH1H2( n0, h0, n1, h1, dx1 )
-!  call remapping_core_w( CS, n0, h0, u0, n1, dx1, u1, h_neglect, h_neglect_edge)
-!  do i=1,n1
-!    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
-!    if (abs(err)>real(n1-1)*epsilon(err)) thisTest = .true.
-!  enddo
-!  if (verbose) write(*,*) 'h1 (by projection)'
-!  if (verbose) call dumpGrid(n1,h1,x1,u1)
-!  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapping_core_w()'
-!  remapping_unit_tests = remapping_unit_tests .or. thisTest
-!#endif
-!
-!  thisTest = .false.
-!  allocate(edges(n0,2))
-!  allocate(poly_cfs(n0,CS%degree+1))
-!
-!  edges(:,:) = 0.0
-!  poly_cfs(:,:) = 0.0
-!
-!  call edge_values_explicit_h4( n0, h0, u0, edges, h_neglect=1e-10, answers_2018=answers_2018 )
-!  call PPM_reconstruction( n0, h0, u0, edges, poly_cfs, h_neglect, answers_2018=answers_2018 )
-!  call PPM_boundary_extrapolation( n0, h0, u0, edges, poly_cfs, h_neglect )
-!  u1(:) = 0.
-!  call remapByProjection( n0, h0, u0, edges, poly_cfs, &
-!                          n1, h1, INTEGRATION_PPM, u1, h_neglect )
-!  do i=1,n1
-!    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
-!    if (abs(err)>2.*epsilon(err)) thisTest = .true.
-!  enddo
-!  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByProjection()'
-!  remapping_unit_tests = remapping_unit_tests .or. thisTest
-!
-!  thisTest = .false.
-!  u1(:) = 0.
-!  call remapByDeltaZ( n0, h0, u0, edges, poly_cfs, &
-!                      n1, x1-x0(1:n1+1), &
-!                      INTEGRATION_PPM, u1, hn1, h_neglect )
-!  if (verbose) write(*,*) 'h1 (by delta)'
-!  if (verbose) call dumpGrid(n1,h1,x1,u1)
-!  hn1=hn1-h1
-!  do i=1,n1
-!    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
-!    if (abs(err)>2.*epsilon(err)) thisTest = .true.
-!  enddo
-!  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 1'
-!  remapping_unit_tests = remapping_unit_tests .or. thisTest
-!
-!  thisTest = .false.
-!  call buildGridFromH(n2, h2, x2)
-!  dx2(1:n0+1) = x2(1:n0+1) - x0
-!  dx2(n0+2:n2+1) = x2(n0+2:n2+1) - x0(n0+1)
-!  call remapByDeltaZ( n0, h0, u0, edges, poly_cfs, &
-!                      n2, dx2, &
-!                      INTEGRATION_PPM, u2, hn2, h_neglect )
-!  if (verbose) write(*,*) 'h2'
-!  if (verbose) call dumpGrid(n2,h2,x2,u2)
-!  if (verbose) write(*,*) 'hn2'
-!  if (verbose) call dumpGrid(n2,hn2,x2,u2)
-!
-!  do i=1,n2
-!    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
-!    if (abs(err)>2.*epsilon(err)) thisTest = .true.
-!  enddo
-!  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 2'
-!  remapping_unit_tests = remapping_unit_tests .or. thisTest
-!
-!  if (verbose) write(*,*) 'Via sub-cells'
-!  thisTest = .false.
-!  call remap_via_sub_cells( n0, h0, u0, edges, poly_cfs, &
-!                            n2, h2, INTEGRATION_PPM, .false., u2, err )
-!  if (verbose) call dumpGrid(n2,h2,x2,u2)
-!
-!  do i=1,n2
-!    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
-!    if (abs(err)>2.*epsilon(err)) thisTest = .true.
-!  enddo
-!  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remap_via_sub_cells() 2'
-!  remapping_unit_tests = remapping_unit_tests .or. thisTest
-!
-!  call remap_via_sub_cells( n0, h0, u0, edges, poly_cfs, &
-!                            6, (/.125,.125,.125,.125,.125,.125/), INTEGRATION_PPM, .false., u2, err )
-!  if (verbose) call dumpGrid(6,h2,x2,u2)
-!
-!  call remap_via_sub_cells( n0, h0, u0, edges, poly_cfs, &
-!                            3, (/2.25,1.5,1./), INTEGRATION_PPM, .false., u2, err )
-!  if (verbose) call dumpGrid(3,h2,x2,u2)
-!
-!  if (.not. remapping_unit_tests) then
-!    write(*,*) 'Pass'
-!  else
-!    write(*,*) '!!!!! Old style tests failed but ignoring...'
-!    remapping_unit_tests = .false. ! Normally return false
-!  endif
-!
-!  write(*,*) '===== MOM_remapping: new remapping_unit_tests =================='
-!
-!  ! PCM tests use 3 cells and degree 1
-!  deallocate(edges, poly_cfs)
-!  allocate(poly_cfs(3,1))
-!  allocate(edges(3,2))
-!
-!  ! : PCM_reconstruction( N, u, edge_values, ppoly_coef )
-!  call PCM_reconstruction(3, (/1.,2.,4./), edges, poly_cfs)
-!  remapping_unit_tests = remapping_unit_tests .or. &
-!    test_answer(v, 3, edges(:,1), (/1.,2.,4./), 'PCM: left edges')
-!  remapping_unit_tests = remapping_unit_tests .or. &
-!    test_answer(v, 3, edges(:,2), (/1.,2.,4./), 'PCM: right edges')
-!  remapping_unit_tests = remapping_unit_tests .or. &
-!    test_answer(v, 3, poly_cfs(:,1), (/1.,2.,4./), 'PCM: P0')
-!
-!  ! PCM tests use 3 cells and degree 2
-!  deallocate(edges, poly_cfs)
-!  allocate(poly_cfs(3,2))
-!  allocate(edges(3,2))
-!
-!  ! PLM_reconstruction( N, h, u, edge_values, ppoly_coef, h_neglect, use_CW84 )
-!  do i = 1,2 ! loop over different methods
-!    CW84 = (i == 2)
-!    if (CW84) then
-!      write(*,*) '= Using Colella and Woodward, 1984 ==='
-!    else
-!      write(*,*) '= Using White and Adcroft, 2008 ==='
-!    endif
-!
-!    ! Straight line profile (1,3,5)
-!    call PLM_reconstruction(3, (/1.,1.,1./), (/1.,3.,5./), edges, poly_cfs, h_neglect, CW84)
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,1), (/1.,2.,5./), 'Unlim PLM: left edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,2), (/1.,4.,5./), 'Unlim PLM: right edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,1), (/1.,2.,5./), 'Unlim PLM: P0')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,2), (/0.,2.,0./), 'Unlim PLM: P1')
-!
-!    ! Curved profile triggering limiter
-!    call PLM_reconstruction(3, (/1.,1.,1./), (/1.,2.,7./), edges, poly_cfs, h_neglect, CW84)
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,1), (/1.,1.,7./), 'Left lim PLM: left edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,2), (/1.,3.,7./), 'Left lim PLM: right edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,1), (/1.,1.,7./), 'Left lim PLM: P0')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,2), (/0.,2.,0./), 'Left lim PLM: P1')
-!
-!    ! Inverted curved profile triggering limiter
-!    call PLM_reconstruction(3, (/1.,1.,1./), (/1.,6.,7./), edges, poly_cfs, h_neglect, CW84)
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,1), (/1.,5.,7./), 'Right lim PLM: left edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,2), (/1.,7.,7./), 'Right lim PLM: right edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,1), (/1.,5.,7./), 'Right lim PLM: P0')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,2), (/0.,2.,0./), 'Right lim PLM: P1')
-!
-!    ! Straight line with variable resolution
-!    call PLM_reconstruction(3, (/1.,2.,3./), (/1.,4.,9./), edges, poly_cfs, h_neglect, CW84)
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,1), (/1.,2.,9./), 'Non-uniform line PLM: left edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,2), (/1.,6.,9./), 'Non-uniform line PLM: right edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,1), (/1.,2.,9./), 'Non-uniform line PLM: P0')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,2), (/0.,4.,0./), 'Non-uniform line PLM: P1')
-!
-!    ! Extremum
-!    call PLM_reconstruction(3, (/1.,2.,3./), (/0.,1.,0./), edges, poly_cfs, h_neglect, CW84)
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,1), (/0.,1.,0./), 'Non-uniform extrema PLM: left edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, edges(:,2), (/0.,1.,0./), 'Non-uniform extrema PLM: right edges')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,1), (/0.,1.,0./), 'Non-uniform extrema PLM: P0')
-!    remapping_unit_tests = remapping_unit_tests .or. &
-!      test_answer(v, 3, poly_cfs(:,2), (/0.,0.,0./), 'Non-uniform extrema PLM: P1')
+  ! Local variables
+  integer, parameter :: n0 = 4, n1 = 3, n2 = 6
+  real :: h0(n0), x0(n0+1), u0(n0)
+  real :: h1(n1), x1(n1+1), u1(n1), hn1(n1), dx1(n1+1)
+  real :: h2(n2), x2(n2+1), u2(n2), hn2(n2), dx2(n2+1)
+  data u0 /9., 3., -3., -9./   ! Linear profile, 4 at surface to -4 at bottom
+  data h0 /4*0.75/ ! 4 uniform layers with total depth of 3
+  data h1 /3*1./   ! 3 uniform layers with total depth of 3
+  data h2 /6*0.5/  ! 6 uniform layers with total depth of 3
+  type(remapping_CS) :: CS !< Remapping control structure
+  real, allocatable, dimension(:,:) :: edges, poly_cfs
+  logical :: answers_2018 !  If true use older, less acccurate expressions.
+  integer :: i
+  real :: err, h_neglect, h_neglect_edge
+  logical :: thisTest, v
+  logical :: CW84 ! indicate to use Colella and Woodward, 1984
 
-! enddo ! method
+  v = verbose
+  answers_2018 = .false. ! .true.
+  h_neglect = hNeglect_dflt
+  h_neglect_edge = hNeglect_dflt ; if (answers_2018) h_neglect_edge = 1.0e-10
 
-! ! PPM tests use 5 cells and degree 3
-! deallocate(edges, poly_cfs)
-! allocate(poly_cfs(5,6))
-! allocate(edges(5,2))
+  write(*,*) '==== MOM_remapping: remapping_unit_tests ================='
+  remapping_unit_tests = .false. ! Normally return false
 
-! call edge_values_explicit_h4( 5, (/1.,1.,1.,1.,1./), (/1.,3.,5.,7.,9./), edges, &
-!                               h_neglect=1e-10, answers_2018=answers_2018 )
-! ! The next two tests currently fail due to roundoff, but pass when given a reasonable tolerance.
-! thisTest = test_answer(v, 5, edges(:,1), (/0.,2.,4.,6.,8./), 'Line H4: left edges', tol=8.0e-15)
-! remapping_unit_tests = remapping_unit_tests .or. thisTest
-! thisTest = test_answer(v, 5, edges(:,2), (/2.,4.,6.,8.,10./), 'Line H4: right edges', tol=1.0e-14)
-! remapping_unit_tests = remapping_unit_tests .or. thisTest
-! edges(:,1) = (/0.,2.,4.,6.,8./)
-! edges(:,2) = (/2.,4.,6.,8.,10./)
-! call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/1.,3.,5.,7.,9./), edges(1:5,:), &
-!                             poly_cfs(1:5,:), h_neglect, answers_2018=answers_2018 )
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,1), (/1.,2.,4.,6.,9./), 'Line PPM: P0')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,2), (/0.,2.,2.,2.,0./), 'Line PPM: P1')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,3), (/0.,0.,0.,0.,0./), 'Line PPM: P2')
+  thisTest = .false.
+  call buildGridFromH(n0, h0, x0)
+  do i=1,n0+1
+    err=x0(i)-0.75*real(i-1)
+    if (abs(err)>real(i-1)*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed buildGridFromH() 1'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  call buildGridFromH(n1, h1, x1)
+  do i=1,n1+1
+    err=x1(i)-real(i-1)
+    if (abs(err)>real(i-1)*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed buildGridFromH() 2'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
 
-! call edge_values_explicit_h4( 5, (/1.,1.,1.,1.,1./), (/1.,1.,7.,19.,37./), edges, &
-!                               h_neglect=1e-10, answers_2018=answers_2018 )
-! ! The next two tests are now passing when answers_2018 = .false., but otherwise only work to roundoff.
-! thisTest = test_answer(v, 5, edges(:,1), (/3.,0.,3.,12.,27./), 'Parabola H4: left edges', tol=2.7e-14)
-! remapping_unit_tests = remapping_unit_tests .or. thisTest
-! thisTest = test_answer(v, 5, edges(:,2), (/0.,3.,12.,27.,48./), 'Parabola H4: right edges', tol=4.8e-14)
-! remapping_unit_tests = remapping_unit_tests .or. thisTest
-! edges(:,1) = (/0.,0.,3.,12.,27./)
-! edges(:,2) = (/0.,3.,12.,27.,48./)
-! call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/0.,1.,7.,19.,37./), edges(1:5,:), &
-!                         poly_cfs(1:5,:), h_neglect, answers_2018=answers_2018 )
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, edges(:,1), (/0.,0.,3.,12.,37./), 'Parabola PPM: left edges')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, edges(:,2), (/0.,3.,12.,27.,37./), 'Parabola PPM: right edges')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,1), (/0.,0.,3.,12.,37./), 'Parabola PPM: P0')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,2), (/0.,0.,6.,12.,0./), 'Parabola PPM: P1')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,3), (/0.,3.,3.,3.,0./), 'Parabola PPM: P2')
+  thisTest = .false.
+  call initialize_remapping(CS, 'PPM_H4', answers_2018=answers_2018)
+  if (verbose) write(*,*) 'h0 (test data)'
+  if (verbose) call dumpGrid(n0,h0,x0,u0)
 
-! edges(:,1) = (/0.,0.,6.,10.,15./)
-! edges(:,2) = (/0.,6.,12.,17.,15./)
-! call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/0.,5.,7.,16.,15./), edges(1:5,:), &
-!                         poly_cfs(1:5,:), h_neglect, answers_2018=answers_2018 )
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, edges(:,1), (/0.,3.,6.,16.,15./), 'Limits PPM: left edges')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, edges(:,2), (/0.,6.,9.,16.,15./), 'Limits PPM: right edges')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,1), (/0.,3.,6.,16.,15./), 'Limits PPM: P0')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,2), (/0.,6.,0.,0.,0./), 'Limits PPM: P1')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 5, poly_cfs(:,3), (/0.,-3.,3.,0.,0./), 'Limits PPM: P2')
+#ifndef _OPENACC
+  call dzFromH1H2( n0, h0, n1, h1, dx1 )
+  call remapping_core_w( CS, n0, h0, u0, n1, dx1, u1, h_neglect, h_neglect_edge)
+  do i=1,n1
+    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
+    if (abs(err)>real(n1-1)*epsilon(err)) thisTest = .true.
+  enddo
+  if (verbose) write(*,*) 'h1 (by projection)'
+  if (verbose) call dumpGrid(n1,h1,x1,u1)
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapping_core_w()'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+#endif
 
-! call PLM_reconstruction(4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), edges(1:4,:), &
-!                         poly_cfs(1:4,:), h_neglect )
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 4, edges(1:4,1), (/5.,5.,3.,1./), 'PPM: left edges h=0110')
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 4, edges(1:4,2), (/5.,3.,1.,1./), 'PPM: right edges h=0110')
-! call remap_via_sub_cells( 4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), edges(1:4,:), &
-!                           poly_cfs(1:4,:), &
-!                           2, (/1.,1./), INTEGRATION_PLM, .false., u2, err )
-! remapping_unit_tests = remapping_unit_tests .or. &
-!   test_answer(v, 2, u2, (/4.,2./), 'PLM: remapped  h=0110->h=11')
+  thisTest = .false.
+  allocate(edges(n0,2))
+  allocate(poly_cfs(n0,CS%degree+1))
 
-! deallocate(edges, poly_cfs)
+  edges(:,:) = 0.0
+  poly_cfs(:,:) = 0.0
 
-! if (.not. remapping_unit_tests) write(*,*) 'Pass'
+  call edge_values_explicit_h4( n0, h0, u0, edges, h_neglect=1e-10, answers_2018=answers_2018 )
+  call PPM_reconstruction( n0, h0, u0, edges, poly_cfs, h_neglect, answers_2018=answers_2018 )
+  call PPM_boundary_extrapolation( n0, h0, u0, edges, poly_cfs, h_neglect )
+  u1(:) = 0.
+  call remapByProjection( n0, h0, u0, edges, poly_cfs, &
+                          n1, h1, INTEGRATION_PPM, u1, h_neglect )
+  do i=1,n1
+    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByProjection()'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  thisTest = .false.
+  u1(:) = 0.
+  call remapByDeltaZ( n0, h0, u0, edges, poly_cfs, &
+                      n1, x1-x0(1:n1+1), &
+                      INTEGRATION_PPM, u1, hn1, h_neglect )
+  if (verbose) write(*,*) 'h1 (by delta)'
+  if (verbose) call dumpGrid(n1,h1,x1,u1)
+  hn1=hn1-h1
+  do i=1,n1
+    err=u1(i)-8.*(0.5*real(1+n1)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 1'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  thisTest = .false.
+  call buildGridFromH(n2, h2, x2)
+  dx2(1:n0+1) = x2(1:n0+1) - x0
+  dx2(n0+2:n2+1) = x2(n0+2:n2+1) - x0(n0+1)
+  call remapByDeltaZ( n0, h0, u0, edges, poly_cfs, &
+                      n2, dx2, &
+                      INTEGRATION_PPM, u2, hn2, h_neglect )
+  if (verbose) write(*,*) 'h2'
+  if (verbose) call dumpGrid(n2,h2,x2,u2)
+  if (verbose) write(*,*) 'hn2'
+  if (verbose) call dumpGrid(n2,hn2,x2,u2)
+
+  do i=1,n2
+    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remapByDeltaZ() 2'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  if (verbose) write(*,*) 'Via sub-cells'
+  thisTest = .false.
+  call remap_via_sub_cells( 1, 1, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+                            n2, h2, INTEGRATION_PPM, .false., u2, err )
+  if (verbose) call dumpGrid(n2,h2,x2,u2)
+
+  do i=1,n2
+    err=u2(i)-8./2.*(0.5*real(1+n2)-real(i))
+    if (abs(err)>2.*epsilon(err)) thisTest = .true.
+  enddo
+  if (thisTest) write(*,*) 'remapping_unit_tests: Failed remap_via_sub_cells() 2'
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+
+  call remap_via_sub_cells( 1, 1,  n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+                            6, (/.125,.125,.125,.125,.125,.125/), INTEGRATION_PPM, .false., u2, err )
+  if (verbose) call dumpGrid(6,h2,x2,u2)
+
+  call remap_via_sub_cells( 1, 1, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+                            3, (/2.25,1.5,1./), INTEGRATION_PPM, .false., u2, err )
+  if (verbose) call dumpGrid(3,h2,x2,u2)
+
+  if (.not. remapping_unit_tests) then
+    write(*,*) 'Pass'
+  else
+    write(*,*) '!!!!! Old style tests failed but ignoring...'
+    remapping_unit_tests = .false. ! Normally return false
+  endif
+
+  write(*,*) '===== MOM_remapping: new remapping_unit_tests =================='
+
+  ! PCM tests use 3 cells and degree 1
+  deallocate(edges, poly_cfs)
+  allocate(poly_cfs(3,1))
+  allocate(edges(3,2))
+
+  ! : PCM_reconstruction( N, u, edge_values, ppoly_coef )
+  call PCM_reconstruction(3, (/1.,2.,4./), edges, poly_cfs)
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, edges(:,1), (/1.,2.,4./), 'PCM: left edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, edges(:,2), (/1.,2.,4./), 'PCM: right edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 3, poly_cfs(:,1), (/1.,2.,4./), 'PCM: P0')
+
+  ! PCM tests use 3 cells and degree 2
+  deallocate(edges, poly_cfs)
+  allocate(poly_cfs(3,2))
+  allocate(edges(3,2))
+
+  ! PLM_reconstruction( N, h, u, edge_values, ppoly_coef, h_neglect, use_CW84 )
+  do i = 1,2 ! loop over different methods
+    CW84 = (i == 2)
+    if (CW84) then
+      write(*,*) '= Using Colella and Woodward, 1984 ==='
+    else
+      write(*,*) '= Using White and Adcroft, 2008 ==='
+    endif
+
+    ! Straight line profile (1,3,5)
+    call PLM_reconstruction(3, (/1.,1.,1./), (/1.,3.,5./), edges, poly_cfs, h_neglect, CW84)
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,1), (/1.,2.,5./), 'Unlim PLM: left edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,2), (/1.,4.,5./), 'Unlim PLM: right edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,1), (/1.,2.,5./), 'Unlim PLM: P0')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,2), (/0.,2.,0./), 'Unlim PLM: P1')
+
+    ! Curved profile triggering limiter
+    call PLM_reconstruction(3, (/1.,1.,1./), (/1.,2.,7./), edges, poly_cfs, h_neglect, CW84)
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,1), (/1.,1.,7./), 'Left lim PLM: left edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,2), (/1.,3.,7./), 'Left lim PLM: right edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,1), (/1.,1.,7./), 'Left lim PLM: P0')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,2), (/0.,2.,0./), 'Left lim PLM: P1')
+
+    ! Inverted curved profile triggering limiter
+    call PLM_reconstruction(3, (/1.,1.,1./), (/1.,6.,7./), edges, poly_cfs, h_neglect, CW84)
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,1), (/1.,5.,7./), 'Right lim PLM: left edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,2), (/1.,7.,7./), 'Right lim PLM: right edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,1), (/1.,5.,7./), 'Right lim PLM: P0')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,2), (/0.,2.,0./), 'Right lim PLM: P1')
+
+    ! Straight line with variable resolution
+    call PLM_reconstruction(3, (/1.,2.,3./), (/1.,4.,9./), edges, poly_cfs, h_neglect, CW84)
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,1), (/1.,2.,9./), 'Non-uniform line PLM: left edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,2), (/1.,6.,9./), 'Non-uniform line PLM: right edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,1), (/1.,2.,9./), 'Non-uniform line PLM: P0')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,2), (/0.,4.,0./), 'Non-uniform line PLM: P1')
+
+    ! Extremum
+    call PLM_reconstruction(3, (/1.,2.,3./), (/0.,1.,0./), edges, poly_cfs, h_neglect, CW84)
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,1), (/0.,1.,0./), 'Non-uniform extrema PLM: left edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, edges(:,2), (/0.,1.,0./), 'Non-uniform extrema PLM: right edges')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,1), (/0.,1.,0./), 'Non-uniform extrema PLM: P0')
+    remapping_unit_tests = remapping_unit_tests .or. &
+      test_answer(v, 3, poly_cfs(:,2), (/0.,0.,0./), 'Non-uniform extrema PLM: P1')
+
+  enddo ! method
+
+  ! PPM tests use 5 cells and degree 3
+  deallocate(edges, poly_cfs)
+  allocate(poly_cfs(5,6))
+  allocate(edges(5,2))
+
+  call edge_values_explicit_h4( 5, (/1.,1.,1.,1.,1./), (/1.,3.,5.,7.,9./), edges, &
+                                h_neglect=1e-10, answers_2018=answers_2018 )
+  ! The next two tests currently fail due to roundoff, but pass when given a reasonable tolerance.
+  thisTest = test_answer(v, 5, edges(:,1), (/0.,2.,4.,6.,8./), 'Line H4: left edges', tol=8.0e-15)
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  thisTest = test_answer(v, 5, edges(:,2), (/2.,4.,6.,8.,10./), 'Line H4: right edges', tol=1.0e-14)
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  edges(:,1) = (/0.,2.,4.,6.,8./)
+  edges(:,2) = (/2.,4.,6.,8.,10./)
+  call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/1.,3.,5.,7.,9./), edges(1:5,:), &
+                              poly_cfs(1:5,:), h_neglect, answers_2018=answers_2018 )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,1), (/1.,2.,4.,6.,9./), 'Line PPM: P0')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,2), (/0.,2.,2.,2.,0./), 'Line PPM: P1')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,3), (/0.,0.,0.,0.,0./), 'Line PPM: P2')
+
+  call edge_values_explicit_h4( 5, (/1.,1.,1.,1.,1./), (/1.,1.,7.,19.,37./), edges, &
+                                h_neglect=1e-10, answers_2018=answers_2018 )
+  ! The next two tests are now passing when answers_2018 = .false., but otherwise only work to roundoff.
+  thisTest = test_answer(v, 5, edges(:,1), (/3.,0.,3.,12.,27./), 'Parabola H4: left edges', tol=2.7e-14)
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  thisTest = test_answer(v, 5, edges(:,2), (/0.,3.,12.,27.,48./), 'Parabola H4: right edges', tol=4.8e-14)
+  remapping_unit_tests = remapping_unit_tests .or. thisTest
+  edges(:,1) = (/0.,0.,3.,12.,27./)
+  edges(:,2) = (/0.,3.,12.,27.,48./)
+  call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/0.,1.,7.,19.,37./), edges(1:5,:), &
+                          poly_cfs(1:5,:), h_neglect, answers_2018=answers_2018 )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, edges(:,1), (/0.,0.,3.,12.,37./), 'Parabola PPM: left edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, edges(:,2), (/0.,3.,12.,27.,37./), 'Parabola PPM: right edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,1), (/0.,0.,3.,12.,37./), 'Parabola PPM: P0')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,2), (/0.,0.,6.,12.,0./), 'Parabola PPM: P1')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,3), (/0.,3.,3.,3.,0./), 'Parabola PPM: P2')
+
+  edges(:,1) = (/0.,0.,6.,10.,15./)
+  edges(:,2) = (/0.,6.,12.,17.,15./)
+  call PPM_reconstruction(5, (/1.,1.,1.,1.,1./), (/0.,5.,7.,16.,15./), edges(1:5,:), &
+                          poly_cfs(1:5,:), h_neglect, answers_2018=answers_2018 )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, edges(:,1), (/0.,3.,6.,16.,15./), 'Limits PPM: left edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, edges(:,2), (/0.,6.,9.,16.,15./), 'Limits PPM: right edges')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,1), (/0.,3.,6.,16.,15./), 'Limits PPM: P0')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,2), (/0.,6.,0.,0.,0./), 'Limits PPM: P1')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 5, poly_cfs(:,3), (/0.,-3.,3.,0.,0./), 'Limits PPM: P2')
+
+  call PLM_reconstruction(4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), edges(1:4,:), &
+                          poly_cfs(1:4,:), h_neglect )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 4, edges(1:4,1), (/5.,5.,3.,1./), 'PPM: left edges h=0110')
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 4, edges(1:4,2), (/5.,3.,1.,1./), 'PPM: right edges h=0110')
+  call remap_via_sub_cells( 1, 1, 4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), edges(1:4,:), &
+                            CS%degree+1, poly_cfs(1:4,:), &
+                            2, (/1.,1./), INTEGRATION_PLM, .false., u2, err )
+  remapping_unit_tests = remapping_unit_tests .or. &
+    test_answer(v, 2, u2, (/4.,2./), 'PLM: remapped  h=0110->h=11')
+
+  deallocate(edges, poly_cfs)
+
+  if (.not. remapping_unit_tests) write(*,*) 'Pass'
 
 end function remapping_unit_tests
 
