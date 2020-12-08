@@ -202,31 +202,42 @@ subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglec
                                              !! calculations in the same units as h0.
   ! Local variables
   integer :: iMethod
-  real, dimension(n0,2)           :: ppoly_r_E            !Edge value of polynomial
-  real, dimension(n0,2)           :: ppoly_r_S            !Edge slope of polynomial
-  real, dimension(n0,CS%degree+1) :: ppoly_r_coefs !Coefficients of polynomial
+  real, dimension(n0,2,nij)           :: ppoly_r_E     ! Edge value of polynomial
+  real, dimension(n0,2,nij)           :: ppoly_r_S     ! Edge slope of polynomial
+  real, dimension(n0,CS%degree+1,nij) :: ppoly_r_coefs ! Coefficients of polynomial
   integer :: ij, k
   real :: eps, h0tot, h0err, h1tot, h1err, u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, uh_err
   real :: hNeglect, hNeglect_edge
-  real :: lh0(n0), lu0(n0), lh1(n1), lu1(n1)
+  real :: lh0(n0), lu0(n0), lh1(n1), lu1(n1), lE(n0,2), lS(n0,2), lC(n0,CS%degree+1)
 
   hNeglect = 1.0e-30 ; if (present(h_neglect)) hNeglect = h_neglect
   hNeglect_edge = 1.0e-10 ; if (present(h_neglect_edge)) hNeglect_edge = h_neglect_edge
 
-!$acc parallel loop private(lh0, lu0, lh1, lu1, ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
+!$acc parallel loop private(lh0, lu0, lh1, lu1, lC, lE, lS)
   do ij = 1, nij
     lh0(:) = h0(:,ij)
     lu0(:) = u0(:,ij)
-    call build_reconstructions_1d(CS, n0, lh0, lu0, ppoly_r_coefs, ppoly_r_E, ppoly_r_S, iMethod, &
+    call build_reconstructions_1d(CS, n0, lh0, lu0, lC, lE, lS, iMethod, &
                                   hNeglect, hNeglect_edge)
+    ppoly_r_E(:,:,ij) = lE(:,:)
+    ppoly_r_S(:,:,ij) = lS(:,:)
+    ppoly_r_coefs(:,:,ij) = lC(:,:)
 
 #ifndef _OPENACC
-    if (CS%check_reconstruction) call check_reconstructions_1d(n0, h0(:,ij), u0(:,ij), CS%degree, &
-                                     CS%boundary_extrapolation, ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
+    if (CS%check_reconstruction) call check_reconstructions_1d(n0, lh0, lu0, CS%degree, &
+                                     CS%boundary_extrapolation, lC, lE, lS)
 #endif
+  enddo
+  !$acc end parallel
 
+!$acc parallel loop private(lh0, lu0, lh1, lu1, lC, lE, lS)
+  do ij = 1, nij
+    lh0(:) = h0(:,ij)
+    lu0(:) = u0(:,ij)
     lh1(:) = h1(:,ij)
-    call remap_via_sub_cells(n0, lh0, lu0, ppoly_r_E, ppoly_r_coefs, n1, lh1, iMethod, &
+    lE(:,:) = ppoly_r_E(:,:,ij)
+    lC(:,:) = ppoly_r_coefs(:,:,ij)
+    call remap_via_sub_cells(n0, lh0, lu0, lE, lC, n1, lh1, iMethod, &
                              CS%force_bounds_in_subcell, lu1, uh_err)
     u1(:,ij) = lu1(:)
   enddo
@@ -255,16 +266,16 @@ subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglec
       write(0,'(a3,6a24)') 'k','h0','left edge','u0','right edge','h1','u1'
       do k = 1, max(n0,n1)
         if (k<=min(n0,n1)) then
-          write(0,'(i3,1p6e24.16)') k,h0(k,ij),ppoly_r_E(k,1),u0(k,ij),ppoly_r_E(k,2),h1(k,ij),u1(k,ij)
+          write(0,'(i3,1p6e24.16)') k,h0(k,ij),ppoly_r_E(k,1,ij),u0(k,ij),ppoly_r_E(k,2,ij),h1(k,ij),u1(k,ij)
         elseif (k>n0) then
           write(0,'(i3,96x,1p2e24.16)') k,h1(k,ij),u1(k,ij)
         else
-          write(0,'(i3,1p4e24.16)') k,h0(k,ij),ppoly_r_E(k,1),u0(k,ij),ppoly_r_E(k,2)
+          write(0,'(i3,1p4e24.16)') k,h0(k,ij),ppoly_r_E(k,1,ij),u0(k,ij),ppoly_r_E(k,2,ij)
         endif
       enddo
       write(0,'(a3,2a24)') 'k','u0','Polynomial coefficients'
       do k = 1, n0
-        write(0,'(i3,1p6e24.16)') k,u0(k,ij),ppoly_r_coefs(k,:)
+        write(0,'(i3,1p6e24.16)') k,u0(k,ij),ppoly_r_coefs(k,:,ij)
       enddo
       call MOM_error( FATAL, 'MOM_remapping, remapping_core_h: '//&
              'Remapping result is inconsistent!' )
