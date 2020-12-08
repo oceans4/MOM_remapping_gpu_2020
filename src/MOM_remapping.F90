@@ -213,7 +213,6 @@ subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglec
   hNeglect = 1.0e-30 ; if (present(h_neglect)) hNeglect = h_neglect
   hNeglect_edge = 1.0e-10 ; if (present(h_neglect_edge)) hNeglect_edge = h_neglect_edge
 
-!$acc parallel loop private(lh0, lu0, lh1, lu1, lC, lE, lS)
   do ij = 1, nij
     lh0(:) = h0(:,ij)
     lu0(:) = u0(:,ij)
@@ -228,7 +227,6 @@ subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglec
                                      CS%boundary_extrapolation, lC, lE, lS)
 #endif
   enddo
-  !$acc end parallel
 
 !$acc parallel loop private(lh0, lu0, lh1, lu1, lC, lE, lS)
   do ij = 1, nij
@@ -241,7 +239,7 @@ subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglec
                              CS%force_bounds_in_subcell, lu1, uh_err)
     u1(:,ij) = lu1(:)
   enddo
-  !$acc end parallel
+!$acc end parallel
 
 #ifndef _OPENACC
   do ij = 1, nij
