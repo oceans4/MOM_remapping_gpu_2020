@@ -185,50 +185,59 @@ function isPosSumErrSignificant(n1, sum1, n2, sum2)
 end function isPosSumErrSignificant
 
 !> Remaps column of values u0 on grid h0 to grid h1 assuming the top edge is aligned.
-subroutine remapping_core_h(CS, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
-!$acc routine seq
-  type(remapping_CS),  intent(in)  :: CS !< Remapping control structure
-  integer,             intent(in)  :: n0 !< Number of cells on source grid
-  real, dimension(n0), intent(in)  :: h0 !< Cell widths on source grid
-  real, dimension(n0), intent(in)  :: u0 !< Cell averages on source grid
-  integer,             intent(in)  :: n1 !< Number of cells on target grid
-  real, dimension(n1), intent(in)  :: h1 !< Cell widths on target grid
-  real, dimension(n1), intent(out) :: u1 !< Cell averages on target grid
-  real, optional,      intent(in)  :: h_neglect !< A negligibly small width for the
-                                         !! purpose of cell reconstructions
-                                         !! in the same units as h0.
-  real, optional,      intent(in)  :: h_neglect_edge !< A negligibly small width
-                                         !! for the purpose of edge value
-                                         !! calculations in the same units as h0.
+subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
+  type(remapping_CS),      intent(in)  :: CS !< Remapping control structure
+  integer,                 intent(in)  :: nij !< Number of columns
+  integer,                 intent(in)  :: n0 !< Number of cells on source grid
+  real, dimension(n0,nij), intent(in)  :: h0 !< Cell widths on source grid
+  real, dimension(n0,nij), intent(in)  :: u0 !< Cell averages on source grid
+  integer,                 intent(in)  :: n1 !< Number of cells on target grid
+  real, dimension(n1,nij), intent(in)  :: h1 !< Cell widths on target grid
+  real, dimension(n1,nij), intent(out) :: u1 !< Cell averages on target grid
+  real, optional,          intent(in)  :: h_neglect !< A negligibly small width for the
+                                             !! purpose of cell reconstructions
+                                             !! in the same units as h0.
+  real, optional,          intent(in)  :: h_neglect_edge !< A negligibly small width
+                                             !! for the purpose of edge value
+                                             !! calculations in the same units as h0.
   ! Local variables
   integer :: iMethod
   real, dimension(n0,2)           :: ppoly_r_E            !Edge value of polynomial
   real, dimension(n0,2)           :: ppoly_r_S            !Edge slope of polynomial
   real, dimension(n0,CS%degree+1) :: ppoly_r_coefs !Coefficients of polynomial
-  integer :: k
+  integer :: ij, k
   real :: eps, h0tot, h0err, h1tot, h1err, u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, uh_err
   real :: hNeglect, hNeglect_edge
+  real :: lh0(n0), lu0(n0), lh1(n1), lu1(n1)
 
   hNeglect = 1.0e-30 ; if (present(h_neglect)) hNeglect = h_neglect
   hNeglect_edge = 1.0e-10 ; if (present(h_neglect_edge)) hNeglect_edge = h_neglect_edge
 
-  call build_reconstructions_1d( CS, n0, h0, u0, ppoly_r_coefs, ppoly_r_E, ppoly_r_S, iMethod, &
-                                 hNeglect, hNeglect_edge )
+!$acc parallel loop private(lh0, lu0, lh1, lu1, ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
+  do ij = 1, nij
+    lh0(:) = h0(:,ij)
+    lu0(:) = u0(:,ij)
+    call build_reconstructions_1d(CS, n0, lh0, lu0, ppoly_r_coefs, ppoly_r_E, ppoly_r_S, iMethod, &
+                                  hNeglect, hNeglect_edge)
 
 #ifndef _OPENACC
-  if (CS%check_reconstruction) call check_reconstructions_1d(n0, h0, u0, CS%degree, &
-                                   CS%boundary_extrapolation, ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
+    if (CS%check_reconstruction) call check_reconstructions_1d(n0, h0(:,ij), u0(:,ij), CS%degree, &
+                                     CS%boundary_extrapolation, ppoly_r_coefs, ppoly_r_E, ppoly_r_S)
 #endif
 
-
-  call remap_via_sub_cells( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, n1, h1, iMethod, &
-                            CS%force_bounds_in_subcell, u1, uh_err )
+    lh1(:) = h1(:,ij)
+    call remap_via_sub_cells(n0, lh0, lu0, ppoly_r_E, ppoly_r_coefs, n1, lh1, iMethod, &
+                             CS%force_bounds_in_subcell, lu1, uh_err)
+    u1(:,ij) = lu1(:)
+  enddo
+  !$acc end parallel
 
 #ifndef _OPENACC
+  do ij = 1, nij
   if (CS%check_remapping) then
     ! Check errors and bounds
-    call measure_input_bounds( n0, h0, u0, ppoly_r_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
-    call measure_output_bounds( n1, h1, u1, h1tot, h1err, u1tot, u1err, u1min, u1max )
+    call measure_input_bounds( n0, h0(:,ij), u0(:,ij), ppoly_r_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
+    call measure_output_bounds( n1, h1(:,ij), u1(:,ij), h1tot, h1err, u1tot, u1err, u1min, u1max )
     if (iMethod<5) then ! We except PQM until we've debugged it
     if ( (abs(u1tot-u0tot)>(u0err+u1err)+uh_err .and. abs(h1tot-h0tot)<h0err+h1err) &
         .or. (u1min<u0min .or. u1max>u0max) ) then
@@ -246,22 +255,23 @@ subroutine remapping_core_h(CS, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edg
       write(0,'(a3,6a24)') 'k','h0','left edge','u0','right edge','h1','u1'
       do k = 1, max(n0,n1)
         if (k<=min(n0,n1)) then
-          write(0,'(i3,1p6e24.16)') k,h0(k),ppoly_r_E(k,1),u0(k),ppoly_r_E(k,2),h1(k),u1(k)
+          write(0,'(i3,1p6e24.16)') k,h0(k,ij),ppoly_r_E(k,1),u0(k,ij),ppoly_r_E(k,2),h1(k,ij),u1(k,ij)
         elseif (k>n0) then
-          write(0,'(i3,96x,1p2e24.16)') k,h1(k),u1(k)
+          write(0,'(i3,96x,1p2e24.16)') k,h1(k,ij),u1(k,ij)
         else
-          write(0,'(i3,1p4e24.16)') k,h0(k),ppoly_r_E(k,1),u0(k),ppoly_r_E(k,2)
+          write(0,'(i3,1p4e24.16)') k,h0(k,ij),ppoly_r_E(k,1),u0(k,ij),ppoly_r_E(k,2)
         endif
       enddo
       write(0,'(a3,2a24)') 'k','u0','Polynomial coefficients'
       do k = 1, n0
-        write(0,'(i3,1p6e24.16)') k,u0(k),ppoly_r_coefs(k,:)
+        write(0,'(i3,1p6e24.16)') k,u0(k,ij),ppoly_r_coefs(k,:)
       enddo
       call MOM_error( FATAL, 'MOM_remapping, remapping_core_h: '//&
              'Remapping result is inconsistent!' )
     endif
     endif ! method<5
   endif
+  enddo
 #endif
 
 end subroutine remapping_core_h

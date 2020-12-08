@@ -166,23 +166,25 @@ program test_remap_70lvl
     ! Local variables
     integer :: i,j
     real :: cptim1, cptim2
-    real lh0(n0), lu0(n0), lh1(n1), lu1(n1)
+    real lh0(n0,twdth*twdth), lu0(n0,twdth*twdth), lh1(n1,twdth*twdth), lu1(n1,twdth*twdth)
 
     ! Production version does not use "checks"
     call remapping_set_param(CS, check_reconstruction=.false., check_remapping=.false.)
     call cpu_time(cptim1)
-!$acc parallel loop collapse(2) private(lh0,lu0,lh1,lu1)
     do j = 1, twdth
       do i = 1, twdth
-        lh0(:) = h0(:,i,j)
-        lu0(:) = u0(:,i,j)
-        lh1(:) = h1(:,i,j)
-        call remapping_core_h(CS, n0, lh0, lu0, n1, lh1, lu1, &
-                              h_neglect=1.e-30, h_neglect_edge=1.e-30)
-        u1(:,i,j) = lu1(:)
+        lh0(:,i+twdth*(j-1)) = h0(:,i,j)
+        lu0(:,i+twdth*(j-1)) = u0(:,i,j)
+        lh1(:,i+twdth*(j-1)) = h1(:,i,j)
       enddo
     enddo
-!$acc end parallel
+    call remapping_core_h(CS, twdth*twdth, n0, lh0, lu0, n1, lh1, lu1, &
+                          h_neglect=1.e-30, h_neglect_edge=1.e-30)
+    do j = 1, twdth
+      do i = 1, twdth
+        u1(:,i,j) = lu1(:,i+twdth*(j-1))
+      enddo
+    enddo
     call cpu_time(cptim2)
     cputime = cptim2 - cptim1
 
