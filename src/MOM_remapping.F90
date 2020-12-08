@@ -83,10 +83,6 @@ real, parameter :: hNeglect_dflt = 1.E-30 !< A thickness [H ~> m or kg m-2] that
                                       !! changing the numerical result, except where
                                       !! a division by zero would otherwise occur.
 
-logical, parameter :: old_algorithm = .false. !< Use the old "broken" algorithm.
-                                              !! This is a temporary measure to assist
-                                              !! debugging until we delete the old algorithm.
-
 contains
 
 !> Set parameters within remapping object
@@ -585,8 +581,6 @@ subroutine remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, n1, h1, meth
   logical :: src_has_volume !< True if h0 has not been consumed
   logical :: tgt_has_volume !< True if h1 has not been consumed
 
-  if (old_algorithm) isrc_max(:)=1
-
   i0_last_thick_cell = 0
   do i0 = 1, n0
     u0_min(i0) = min(ppoly0_E(i0,1), ppoly0_E(i0,2))
@@ -654,28 +648,13 @@ subroutine remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, n1, h1, meth
       ! Record the source cell thickness found by summing the sub-cell thicknesses.
       h0_eff(i0) = dh0_eff
       ! Move the source index.
-      if (old_algorithm) then
-        if (i0 < i0_last_thick_cell) then
-          i0 = i0 + 1
-          h0_supply = h0(i0)
-          dh0_eff = 0.
-          do while (h0_supply==0. .and. i0<i0_last_thick_cell)
-            ! This loop skips over vanished source cells
-            i0 = i0 + 1
-            h0_supply = h0(i0)
-          enddo
-        else
-          h0_supply = 1.E30
-        endif
+      if (i0 < n0) then
+        i0 = i0 + 1
+        h0_supply = h0(i0)
+        dh0_eff = 0.
       else
-        if (i0 < n0) then
-          i0 = i0 + 1
-          h0_supply = h0(i0)
-          dh0_eff = 0.
-        else
-          h0_supply = 0.
-          src_has_volume = .false.
-        endif
+        h0_supply = 0.
+        src_has_volume = .false.
       endif
     elseif (h0_supply >= h1_supply .and. tgt_has_volume) then
       ! h1_supply is smaller than h0_supply) so we consume h1_supply and increment the
@@ -691,12 +670,8 @@ subroutine remap_via_sub_cells( n0, h0, u0, ppoly0_E, ppoly0_coefs, n1, h1, meth
         i1 = i1 + 1
         h1_supply = h1(i1)
       else
-        if (old_algorithm) then
-          h1_supply = 1.E30
-        else
-          h1_supply = 0.
-          tgt_has_volume = .false.
-        endif
+        h1_supply = 0.
+        tgt_has_volume = .false.
       endif
     elseif (src_has_volume) then
       ! We ran out of target volume but still have source cells to consume
