@@ -164,28 +164,28 @@ program test_remap_70lvl
     real, intent(inout) :: u1(n1,1-halo:twdth+halo,1-halo:twdth+halo) !< Target data
     real, intent(out) :: cputime !< CPU time used
     ! Local variables
+    integer :: ni, nj
     integer :: i,j
     real :: cptim1, cptim2
-    real lh0(n0,twdth*twdth), lu0(n0,twdth*twdth), lh1(n1,twdth*twdth), lu1(n1,twdth*twdth)
+
+    ! TODO: Pass with halos later...
+    !   For now, don't deal with the 1-based to halo-based indexing issue
+    !ni = twdth + 2 * halo
+    !nj = twdth + 2 * halo
+    ni = twdth
+    nj = twdth
 
     ! Production version does not use "checks"
     call remapping_set_param(CS, check_reconstruction=.false., check_remapping=.false.)
+
+    ! TODO: Replace 1:twdth with : (or implicit) when halo size is passed
     call cpu_time(cptim1)
-    do j = 1, twdth
-      do i = 1, twdth
-        lh0(:,i+twdth*(j-1)) = h0(:,i,j)
-        lu0(:,i+twdth*(j-1)) = u0(:,i,j)
-        lh1(:,i+twdth*(j-1)) = h1(:,i,j)
-      enddo
-    enddo
-    call remapping_core_h(CS, twdth*twdth, n0, lh0, lu0, n1, lh1, lu1, &
+    call remapping_core_h(CS, ni, nj, &
+                          n0, h0(:,1:twdth,1:twdth), u0(:,1:twdth,1:twdth), &
+                          n1, h1(:,1:twdth,1:twdth), u1(:,1:twdth,1:twdth), &
                           h_neglect=1.e-30, h_neglect_edge=1.e-30)
-    do j = 1, twdth
-      do i = 1, twdth
-        u1(:,i,j) = lu1(:,i+twdth*(j-1))
-      enddo
-    enddo
     call cpu_time(cptim2)
+
     cputime = cptim2 - cptim1
 
   end subroutine do_remap_t

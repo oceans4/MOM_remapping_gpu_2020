@@ -185,27 +185,28 @@ function isPosSumErrSignificant(n1, sum1, n2, sum2)
 end function isPosSumErrSignificant
 
 !> Remaps column of values u0 on grid h0 to grid h1 assuming the top edge is aligned.
-subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
-  type(remapping_CS),      intent(in)  :: CS !< Remapping control structure
-  integer,                 intent(in)  :: nij !< Number of columns
-  integer,                 intent(in)  :: n0 !< Number of cells on source grid
-  real, dimension(n0,nij), intent(in)  :: h0 !< Cell widths on source grid
-  real, dimension(n0,nij), intent(in)  :: u0 !< Cell averages on source grid
-  integer,                 intent(in)  :: n1 !< Number of cells on target grid
-  real, dimension(n1,nij), intent(in)  :: h1 !< Cell widths on target grid
-  real, dimension(n1,nij), intent(out) :: u1 !< Cell averages on target grid
-  real, optional,          intent(in)  :: h_neglect !< A negligibly small width for the
-                                             !! purpose of cell reconstructions
-                                             !! in the same units as h0.
-  real, optional,          intent(in)  :: h_neglect_edge !< A negligibly small width
-                                             !! for the purpose of edge value
-                                             !! calculations in the same units as h0.
+subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
+  type(remapping_CS),      intent(in)    :: CS !< Remapping control structure
+  integer,                 intent(in)    :: ni !< Number of cells in x
+  integer,                 intent(in)    :: nj !< Number of cells in y
+  integer,                 intent(in)    :: n0 !< Number of cells on source grid
+  real, dimension(n0,ni,nj), intent(in)  :: h0 !< Cell widths on source grid
+  real, dimension(n0,ni,nj), intent(in)  :: u0 !< Cell averages on source grid
+  integer,                 intent(in)    :: n1 !< Number of cells on target grid
+  real, dimension(n1,ni,nj), intent(in)  :: h1 !< Cell widths on target grid
+  real, dimension(n1,ni,nj), intent(out) :: u1 !< Cell averages on target grid
+  real, optional,          intent(in)    :: h_neglect !< A negligibly small width for the
+                                               !! purpose of cell reconstructions
+                                               !! in the same units as h0.
+  real, optional,          intent(in)    :: h_neglect_edge !< A negligibly small width
+                                               !! for the purpose of edge value
+                                               !! calculations in the same units as h0.
   ! Local variables
   integer :: iMethod
-  real, dimension(n0,2,nij)           :: ppoly_r_E     ! Edge value of polynomial
-  real, dimension(n0,2,nij)           :: ppoly_r_S     ! Edge slope of polynomial
-  real, dimension(n0,CS%degree+1,nij) :: ppoly_r_coefs ! Coefficients of polynomial
-  integer :: ij, k
+  real, dimension(n0,2,ni,nj)           :: ppoly_r_E     ! Edge value of polynomial
+  real, dimension(n0,2,ni,nj)           :: ppoly_r_S     ! Edge slope of polynomial
+  real, dimension(n0,CS%degree+1,ni,nj) :: ppoly_r_coefs ! Coefficients of polynomial
+  integer :: i, j, k
   real :: eps, h0tot, h0err, h1tot, h1err, u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, uh_err
   real :: hNeglect, hNeglect_edge
   real :: lh0(n0), lu0(n0), lh1(n1), lu1(n1), lE(n0,2), lS(n0,2), lC(n0,CS%degree+1)
@@ -213,30 +214,30 @@ subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglec
   hNeglect = 1.0e-30 ; if (present(h_neglect)) hNeglect = h_neglect
   hNeglect_edge = 1.0e-10 ; if (present(h_neglect_edge)) hNeglect_edge = h_neglect_edge
 
-  do ij = 1, nij
-    lh0(:) = h0(:,ij)
-    lu0(:) = u0(:,ij)
+  do j = 1, nj ; do i = 1, ni
+    lh0(:) = h0(:,ni,nj)
+    lu0(:) = u0(:,ni,nj)
     call build_reconstructions_1d(CS, n0, lh0, lu0, lC, lE, lS, iMethod, &
                                   hNeglect, hNeglect_edge)
-    ppoly_r_E(:,:,ij) = lE(:,:)
-    ppoly_r_S(:,:,ij) = lS(:,:)
-    ppoly_r_coefs(:,:,ij) = lC(:,:)
+    ppoly_r_E(:,:,ni,nj) = lE(:,:)
+    ppoly_r_S(:,:,ni,nj) = lS(:,:)
+    ppoly_r_coefs(:,:,ni,nj) = lC(:,:)
 
 #ifndef _OPENACC
     if (CS%check_reconstruction) call check_reconstructions_1d(n0, lh0, lu0, CS%degree, &
                                      CS%boundary_extrapolation, lC, lE, lS)
 #endif
-  enddo
+  enddo ; enddo
 
-  call remap_via_sub_cells(nij, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
+  call remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
                              CS%force_bounds_in_subcell, u1, uh_err)
 
 #ifndef _OPENACC
-  do ij = 1, nij
+  do j = 1, nj ; do i = 1, ni
   if (CS%check_remapping) then
     ! Check errors and bounds
-    call measure_input_bounds( n0, h0(:,ij), u0(:,ij), ppoly_r_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
-    call measure_output_bounds( n1, h1(:,ij), u1(:,ij), h1tot, h1err, u1tot, u1err, u1min, u1max )
+    call measure_input_bounds( n0, h0(:,i,j), u0(:,i,j), ppoly_r_E, h0tot, h0err, u0tot, u0err, u0min, u0max )
+    call measure_output_bounds( n1, h1(:,i,j), u1(:,i,j), h1tot, h1err, u1tot, u1err, u1min, u1max )
     if (iMethod<5) then ! We except PQM until we've debugged it
     if ( (abs(u1tot-u0tot)>(u0err+u1err)+uh_err .and. abs(h1tot-h0tot)<h0err+h1err) &
         .or. (u1min<u0min .or. u1max>u0max) ) then
@@ -254,23 +255,23 @@ subroutine remapping_core_h(CS, nij, n0, h0, u0, n1, h1, u1, h_neglect, h_neglec
       write(0,'(a3,6a24)') 'k','h0','left edge','u0','right edge','h1','u1'
       do k = 1, max(n0,n1)
         if (k<=min(n0,n1)) then
-          write(0,'(i3,1p6e24.16)') k,h0(k,ij),ppoly_r_E(k,1,ij),u0(k,ij),ppoly_r_E(k,2,ij),h1(k,ij),u1(k,ij)
+          write(0,'(i3,1p6e24.16)') k,h0(k,i,j),ppoly_r_E(k,1,i,j),u0(k,i,j),ppoly_r_E(k,2,i,j),h1(k,i,j),u1(k,i,j)
         elseif (k>n0) then
-          write(0,'(i3,96x,1p2e24.16)') k,h1(k,ij),u1(k,ij)
+          write(0,'(i3,96x,1p2e24.16)') k,h1(k,i,j),u1(k,i,j)
         else
-          write(0,'(i3,1p4e24.16)') k,h0(k,ij),ppoly_r_E(k,1,ij),u0(k,ij),ppoly_r_E(k,2,ij)
+          write(0,'(i3,1p4e24.16)') k,h0(k,i,j),ppoly_r_E(k,1,i,j),u0(k,i,j),ppoly_r_E(k,2,i,j)
         endif
       enddo
       write(0,'(a3,2a24)') 'k','u0','Polynomial coefficients'
       do k = 1, n0
-        write(0,'(i3,1p6e24.16)') k,u0(k,ij),ppoly_r_coefs(k,:,ij)
+        write(0,'(i3,1p6e24.16)') k,u0(k,i,j),ppoly_r_coefs(k,:,i,j)
       enddo
       call MOM_error( FATAL, 'MOM_remapping, remapping_core_h: '//&
              'Remapping result is inconsistent!' )
     endif
     endif ! method<5
   endif
-  enddo
+  enddo ; enddo
 #endif
 
 end subroutine remapping_core_h
@@ -278,8 +279,10 @@ end subroutine remapping_core_h
 #ifndef _OPENACC
 !> Remaps column of values u0 on grid h0 to implied grid h1
 !! where the interfaces of h1 differ from those of h0 by dx.
-subroutine remapping_core_w( CS, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_edge )
+subroutine remapping_core_w(CS, ni, nj, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_edge )
   type(remapping_CS),  intent(in)  :: CS !< Remapping control structure
+  integer,             intent(in)  :: ni !< Number of cells x
+  integer,             intent(in)  :: nj !< Number of cells y
   integer,             intent(in)  :: n0 !< Number of cells on source grid
   real, dimension(n0), intent(in)  :: h0 !< Cell widths on source grid
   real, dimension(n0), intent(in)  :: u0 !< Cell averages on source grid
@@ -322,7 +325,7 @@ subroutine remapping_core_w( CS, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_ed
       h1(k) = max( 0., dx(k+1) - dx(k) )
     endif
   enddo
-  call remap_via_sub_cells( 1, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
+  call remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
                             CS%force_bounds_in_subcell,u1, uh_err )
 ! call remapByDeltaZ( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, n1, dx, iMethod, u1, hNeglect )
 ! call remapByProjection( n0, h0, u0, CS%ppoly_r, n1, h1, iMethod, u1, hNeglect )
@@ -537,22 +540,24 @@ end subroutine check_reconstructions_1d
 !> Remaps column of n0 values u0 on grid h0 to grid h1 with n1 cells by calculating
 !! the n0+n1+1 sub-integrals of the intersection of h0 and h1, and the summing the
 !! appropriate integrals into the h1*u1 values.  h0 and h1 must have the same units.
-subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, h1, method, &
+subroutine remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, h1, method, &
                                force_bounds_in_subcell, u1, uh_err)
-  integer,           intent(in)    :: nij    !< Number of columns
+  integer,           intent(in)    :: ni     !< Number of cells in x
+  integer,           intent(in)    :: nj     !< Number of cells in y
   integer,           intent(in)    :: n0     !< Number of cells in source grid
-  real,              intent(in)    :: h0(n0,nij)  !< Source grid widths (size n0)
-  real,              intent(in)    :: u0(n0,nij)  !< Source cell averages (size n0)
-  real,              intent(in)    :: ppoly0_E(n0,2,nij)            !< Edge value of polynomial
+  real,              intent(in)    :: h0(n0,ni,nj)  !< Source grid widths (size n0)
+  real,              intent(in)    :: u0(n0,ni,nj)  !< Source cell averages (size n0)
+  real,              intent(in)    :: ppoly0_E(n0,2,ni,nj)            !< Edge value of polynomial
   integer,           intent(in)    :: np     !< Degree + 1 of polynomial
-  real,              intent(in)    :: ppoly0_coefs(n0,np,nij) !< Coefficients of polynomial
+  real,              intent(in)    :: ppoly0_coefs(n0,np,ni,nj) !< Coefficients of polynomial
   integer,           intent(in)    :: n1     !< Number of cells in target grid
-  real,              intent(in)    :: h1(n1,nij)  !< Target grid widths (size n1)
+  real,              intent(in)    :: h1(n1,ni,nj)  !< Target grid widths (size n1)
   integer,           intent(in)    :: method !< Remapping scheme to use
   logical,           intent(in)    :: force_bounds_in_subcell !< Force sub-cell values to be bounded
-  real,              intent(out)   :: u1(n1,nij)  !< Target cell averages (size n1)
+  real,              intent(out)   :: u1(n1,ni,nj)  !< Target cell averages (size n1)
   real,              intent(out)   :: uh_err !< Estimate of bound on error in sum of u*h
   ! Local variables
+  integer :: i, j  ! Index loops
   integer :: i_sub ! Index of sub-cell
   integer :: i0 ! Index into h0(1:n0), source column
   integer :: i1 ! Index into h1(1:n1), target column
@@ -586,42 +591,42 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   real :: u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, u2tot, u2err, u2min, u2max, u_orig
   logical :: src_has_volume !< True if h0 has not been consumed
   logical :: tgt_has_volume !< True if h1 has not been consumed
-  integer :: ij
 
-!$acc parallel loop &
+!$acc parallel loop collapse(2) &
 !$acc private( &
 !$acc   h_sub, uh_sub, u_sub, isub_src, isrc_start, isrc_end, isrc_max, &
 !$acc   h0_eff, u0_min, u0_max, itgt_start, itgt_end &
 !$acc )
-  do ij = 1, nij
+  ! TODO: Indent properly
+  do j = 1, nj ; do i = 1, ni
 
-    i0_last_thick_cell = 0
-    do i0 = 1, n0
-      u0_min(i0) = min(ppoly0_E(i0,1,ij), ppoly0_E(i0,2,ij))
-      u0_max(i0) = max(ppoly0_E(i0,1,ij), ppoly0_E(i0,2,ij))
-      if (h0(i0,ij)>0.) i0_last_thick_cell = i0
-    enddo
+  i0_last_thick_cell = 0
+  do i0 = 1, n0
+    u0_min(i0) = min(ppoly0_E(i0,1,i,j), ppoly0_E(i0,2,i,j))
+    u0_max(i0) = max(ppoly0_E(i0,1,i,j), ppoly0_E(i0,2,i,j))
+    if (h0(i0,i,j)>0.) i0_last_thick_cell = i0
+  enddo
 
-    ! Initialize algorithm
-    h0_supply = h0(1,ij)
-    h1_supply = h1(1,ij)
-    src_has_volume = .true.
-    tgt_has_volume = .true.
-    i0 = 1 ; i1 = 1
-    i_start0 = 1 ; i_start1 = 1
-    i_max = 1
-    dh_max = 0.
-    dh0_eff = 0.
+  ! Initialize algorithm
+  h0_supply = h0(1,i,j)
+  h1_supply = h1(1,i,j)
+  src_has_volume = .true.
+  tgt_has_volume = .true.
+  i0 = 1 ; i1 = 1
+  i_start0 = 1 ; i_start1 = 1
+  i_max = 1
+  dh_max = 0.
+  dh0_eff = 0.
 
-    ! First sub-cell is always vanished
-    h_sub(1) = 0.
-    isrc_start(1) = 1
-    isrc_end(1) = 1
-    isrc_max(1) = 1
-    isub_src(1) = 1
+  ! First sub-cell is always vanished
+  h_sub(1) = 0.
+  isrc_start(1) = 1
+  isrc_end(1) = 1
+  isrc_max(1) = 1
+  isub_src(1) = 1
 
-    ! Loop over each sub-cell to calculate intersections with source and target grids
-    do i_sub = 2, n0+n1+1
+  ! Loop over each sub-cell to calculate intersections with source and target grids
+  do i_sub = 2, n0+n1+1
 
     ! This is the width of the sub-cell, determined by which ever column has the least
     ! supply available to consume.
@@ -664,7 +669,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       ! Move the source index.
       if (i0 < n0) then
         i0 = i0 + 1
-        h0_supply = h0(i0,ij)
+        h0_supply = h0(i0,i,j)
         dh0_eff = 0.
       else
         h0_supply = 0.
@@ -682,7 +687,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       ! Move the target index.
       if (i1 < n1) then
         i1 = i1 + 1
-        h1_supply = h1(i1,ij)
+        h1_supply = h1(i1,i,j)
       else
         h1_supply = 0.
         tgt_has_volume = .false.
@@ -702,7 +707,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       h0_eff(i0) = dh0_eff
       if (i0 < n0) then
         i0 = i0 + 1
-        h0_supply = h0(i0,ij)
+        h0_supply = h0(i0,i,j)
         dh0_eff = 0.
       else
         h0_supply = 0.
@@ -718,7 +723,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       ! Move the target index.
       if (i1 < n1) then
         i1 = i1 + 1
-        h1_supply = h1(i1,ij)
+        h1_supply = h1(i1,i,j)
       else
         h1_supply = 0.
         tgt_has_volume = .false.
@@ -733,7 +738,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   xa = 0.
   dh0_eff = 0.
   uh_sub(1) = 0.
-  u_sub(1) = ppoly0_E(1,1,ij)
+  u_sub(1) = ppoly0_E(1,1,i,j)
   u02_err = 0.
   do i_sub = 2, n0+n1
 
@@ -750,18 +755,18 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
     if (h0_eff(i0)>0.) then
       xb = dh0_eff / h0_eff(i0) ! This expression yields xa <= xb <= 1.0
       xb = min(1., xb) ! This is only needed when the total target column is wider than the source column
-      u_sub(i_sub) = average_value_ppoly( n0, u0(:,ij), ppoly0_E(:,:,ij), ppoly0_coefs(:,:,ij), method, i0, xa, xb)
+      u_sub(i_sub) = average_value_ppoly( n0, u0(:,i,j), ppoly0_E(:,:,i,j), ppoly0_coefs(:,:,i,j), method, i0, xa, xb)
     else ! Vanished cell
       xb = 1.
-      u_sub(i_sub) = u0(i0,ij)
+      u_sub(i_sub) = u0(i0,i,j)
     endif
     if (debug_bounds) then
       if (method<5 .and.(u_sub(i_sub)<u0_min(i0) .or. u_sub(i_sub)>u0_max(i0))) then
         write(0,*) 'Sub cell average is out of bounds',i_sub,'method=',method
         write(0,*) 'xa,xb: ',xa,xb
-        write(0,*) 'Edge values: ',ppoly0_E(i0,:,ij),'mean',u0(i0,ij)
-        write(0,*) 'a_c: ',(u0(i0,ij)-ppoly0_E(i0,1,ij))+(u0(i0,ij)-ppoly0_E(i0,2,ij))
-        write(0,*) 'Polynomial coeffs: ',ppoly0_coefs(i0,:,ij)
+        write(0,*) 'Edge values: ',ppoly0_E(i0,:,i,j),'mean',u0(i0,i,j)
+        write(0,*) 'a_c: ',(u0(i0,i,j)-ppoly0_E(i0,1,i,j))+(u0(i0,i,j)-ppoly0_E(i0,2,i,j))
+        write(0,*) 'Polynomial coeffs: ',ppoly0_coefs(i0,:,i,j)
         write(0,*) 'Bounds min=',u0_min(i0),'max=',u0_max(i0)
         write(0,*) 'Average: ',u_sub(i_sub),'rel to min=',u_sub(i_sub)-u0_min(i0),'rel to max=',u_sub(i_sub)-u0_max(i0)
         call MOM_error( FATAL, 'MOM_remapping, remap_via_sub_cells: '//&
@@ -788,8 +793,8 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
     endif
 
   enddo
-  u_sub(n0+n1+1) = ppoly0_E(n0,2,ij)                   ! This value is only needed when total target column
-  uh_sub(n0+n1+1) = ppoly0_E(n0,2,ij) * h_sub(n0+n1+1) ! is wider than the source column
+  u_sub(n0+n1+1) = ppoly0_E(n0,2,i,j)                   ! This value is only needed when total target column
+  uh_sub(n0+n1+1) = ppoly0_E(n0,2,i,j) * h_sub(n0+n1+1) ! is wider than the source column
 
   if (adjust_thickest_subcell) then
     ! Loop over each source cell substituting the integral/average for the thickest sub-cell (within
@@ -804,8 +809,8 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
         do i_sub = isrc_start(i0), isrc_end(i0)
           if (i_sub /= i_max) duh = duh + uh_sub(i_sub)
         enddo
-        uh_sub(i_max) = u0(i0,ij)*h0(i0,ij) - duh
-        u02_err = u02_err + max( abs(uh_sub(i_max)), abs(u0(i0,ij)*h0(i0,ij)), abs(duh) )
+        uh_sub(i_max) = u0(i0,i,j)*h0(i0,i,j) - duh
+        u02_err = u02_err + max( abs(uh_sub(i_max)), abs(u0(i0,i,j)*h0(i0,i,j)), abs(duh) )
       endif
     enddo
   endif
@@ -813,7 +818,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   ! Loop over each target cell summing the integrals from sub-cells within the target cell.
   uh_err = 0.
   do i1 = 1, n1
-    if (h1(i1,ij) > 0.) then
+    if (h1(i1,i,j) > 0.) then
       duh = 0. ; dh = 0.
       i_sub = itgt_start(i1)
       if (force_bounds_in_target) then
@@ -830,17 +835,17 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
         ! This accumulates the contribution to the error bound for the sum of u*h
         uh_err = uh_err + max(abs(duh),abs(uh_sub(i_sub)))*epsilon(duh)
       enddo
-      u1(i1,ij) = duh / dh
+      u1(i1,i,j) = duh / dh
       ! This is the contribution from the division to the error bound for the sum of u*h
       uh_err = uh_err + abs(duh)*epsilon(duh)
       if (force_bounds_in_target) then
-        u_orig = u1(i1,ij)
-        u1(i1,ij) = max(u1min, min(u1max, u1(i1,ij)))
+        u_orig = u1(i1,i,j)
+        u1(i1,i,j) = max(u1min, min(u1max, u1(i1,i,j)))
         ! Adjusting to be bounded contributes to the error for the sum of u*h
-        uh_err = uh_err + dh*abs( u1(i1,ij)-u_orig )
+        uh_err = uh_err + dh*abs( u1(i1,i,j)-u_orig )
       endif
     else
-      u1(i1,ij) = u_sub(itgt_start(i1))
+      u1(i1,i,j) = u_sub(itgt_start(i1))
     endif
   enddo
 
@@ -885,16 +890,16 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
       write(0,'(a3,6a24,2a3)') 'k','h0','left edge','u0','right edge','h1','u1','is','ie'
       do k = 1, max(n0,n1)
         if (k<=min(n0,n1)) then
-          write(0,'(i3,1p6e24.16,2i3)') k,h0(k,ij),ppoly0_E(k,1,ij),u0(k,ij),ppoly0_E(k,2,ij),h1(k,ij),u1(k,ij),itgt_start(k),itgt_end(k)
+          write(0,'(i3,1p6e24.16,2i3)') k,h0(k,i,j),ppoly0_E(k,1,i,j),u0(k,i,j),ppoly0_E(k,2,i,j),h1(k,i,j),u1(k,i,j),itgt_start(k),itgt_end(k)
         elseif (k>n0) then
-          write(0,'(i3,96x,1p2e24.16,2i3)') k,h1(k,ij),u1(k,ij),itgt_start(k),itgt_end(k)
+          write(0,'(i3,96x,1p2e24.16,2i3)') k,h1(k,i,j),u1(k,i,j),itgt_start(k),itgt_end(k)
         else
-          write(0,'(i3,1p4e24.16)') k,h0(k,ij),ppoly0_E(k,1,ij),u0(k,ij),ppoly0_E(k,2,ij)
+          write(0,'(i3,1p4e24.16)') k,h0(k,i,j),ppoly0_E(k,1,i,j),u0(k,i,j),ppoly0_E(k,2,i,j)
         endif
       enddo
       write(0,'(a3,2a24)') 'k','u0','Polynomial coefficients'
       do k = 1, n0
-        write(0,'(i3,1p6e24.16)') k,u0(k,ij),ppoly0_coefs(k,:,ij)
+        write(0,'(i3,1p6e24.16)') k,u0(k,i,j),ppoly0_coefs(k,:,i,j)
       enddo
       write(0,'(a3,3a24,a3,2a24)') 'k','Sub-cell h','Sub-cell u','Sub-cell hu','i0','xa','xb'
       xa = 0.
@@ -923,7 +928,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   ! Include the error remapping from source to sub-cells in the estimate of total remapping error
   uh_err = uh_err + u02_err
 
-  enddo
+  enddo ; enddo
 !$acc end parallel
 
 end subroutine remap_via_sub_cells
@@ -1638,6 +1643,7 @@ end subroutine end_remapping
 logical function remapping_unit_tests(verbose)
   logical, intent(in) :: verbose !< If true, write results to stdout
   ! Local variables
+  integer, parameter :: ni = 1, nj = 1
   integer, parameter :: n0 = 4, n1 = 3, n2 = 6
   real :: h0(n0), x0(n0+1), u0(n0)
   real :: h1(n1), x1(n1+1), u1(n1), hn1(n1), dx1(n1+1)
@@ -1685,7 +1691,7 @@ logical function remapping_unit_tests(verbose)
 
 #ifndef _OPENACC
   call dzFromH1H2( n0, h0, n1, h1, dx1 )
-  call remapping_core_w( CS, n0, h0, u0, n1, dx1, u1, h_neglect, h_neglect_edge)
+  call remapping_core_w(CS, ni, nj, n0, h0, u0, n1, dx1, u1, h_neglect, h_neglect_edge)
   do i=1,n1
     err=u1(i)-8.*(0.5*real(1+n1)-real(i))
     if (abs(err)>real(n1-1)*epsilon(err)) thisTest = .true.
@@ -1752,7 +1758,7 @@ logical function remapping_unit_tests(verbose)
 
   if (verbose) write(*,*) 'Via sub-cells'
   thisTest = .false.
-  call remap_via_sub_cells( 1, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+  call remap_via_sub_cells(ni, nj, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
                             n2, h2, INTEGRATION_PPM, .false., u2, err )
   if (verbose) call dumpGrid(n2,h2,x2,u2)
 
@@ -1763,11 +1769,11 @@ logical function remapping_unit_tests(verbose)
   if (thisTest) write(*,*) 'remapping_unit_tests: Failed remap_via_sub_cells() 2'
   remapping_unit_tests = remapping_unit_tests .or. thisTest
 
-  call remap_via_sub_cells( 1, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+  call remap_via_sub_cells(ni, nj, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
                             6, (/.125,.125,.125,.125,.125,.125/), INTEGRATION_PPM, .false., u2, err )
   if (verbose) call dumpGrid(6,h2,x2,u2)
 
-  call remap_via_sub_cells( 1, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+  call remap_via_sub_cells(ni, nj, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
                             3, (/2.25,1.5,1./), INTEGRATION_PPM, .false., u2, err )
   if (verbose) call dumpGrid(3,h2,x2,u2)
 
@@ -1931,7 +1937,7 @@ logical function remapping_unit_tests(verbose)
     test_answer(v, 4, edges(1:4,1), (/5.,5.,3.,1./), 'PPM: left edges h=0110')
   remapping_unit_tests = remapping_unit_tests .or. &
     test_answer(v, 4, edges(1:4,2), (/5.,3.,1.,1./), 'PPM: right edges h=0110')
-  call remap_via_sub_cells( 1, 4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), edges(1:4,:), &
+  call remap_via_sub_cells(1, 1, 4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), edges(1:4,:), &
                             size(poly_cfs,2)+1, poly_cfs(1:4,:), &
                             2, (/1.,1./), INTEGRATION_PLM, .false., u2, err )
   remapping_unit_tests = remapping_unit_tests .or. &
