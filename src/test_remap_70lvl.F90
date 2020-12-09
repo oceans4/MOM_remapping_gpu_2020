@@ -24,7 +24,7 @@ program test_remap_70lvl
   real :: rn0(n0), rn1(n1) ! Random number vectors
   real :: h0sum, h1sum ! Total thicknesses of column
   character(len=32) :: arg ! Command line argument
-  real :: cptime ! CPU time
+  real :: cptime(3) ! CPU time
 
   ! Read tile width and halo from command line arguments (fall back to defaults above)
   select case ( command_argument_count() )
@@ -77,37 +77,37 @@ program test_remap_70lvl
                             boundary_extrapolation=.false. )
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
   print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
-  print '(''PCM time taken: '',f8.3,'' secs'')', cptime
+  print '(''PCM time taken: '',3f8.3,'' secs'')', cptime
 
   ! Remap using PLM
   call remapping_set_param(CS, remapping_scheme='PLM')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
   print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
-  print '(''PLM time taken: '',f8.3,'' secs'')', cptime
+  print '(''PLM time taken: '',3f8.3,'' secs'')', cptime
 
   ! Remap using PPM with explicit edge values
   call remapping_set_param(CS, remapping_scheme='PPM_H4')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
   print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
-  print '(''PPM_H4 time taken: '',f8.3,'' secs'')', cptime
+  print '(''PPM_H4 time taken: '',3f8.3,'' secs'')', cptime
 
   ! Remap using PPM with implicit edge values
   call remapping_set_param(CS, remapping_scheme='PPM_IH4')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
   print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
-  print '(''PPM_IH4 time taken: '',f8.3,'' secs'')', cptime
+  print '(''PPM_IH4 time taken: '',3f8.3,'' secs'')', cptime
 
   ! Remap using PQM with IH4-IH3
   call remapping_set_param(CS, remapping_scheme='PQM_IH4IH3')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
   print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
-  print '(''PQM_IH4IH3 time taken: '',f8.3,'' secs'')', cptime
+  print '(''PQM_IH4IH3 time taken: '',3f8.3,'' secs'')', cptime
 
   ! Remap using PQM with IH6-IH5
   call remapping_set_param(CS, remapping_scheme='PQM_IH6IH5')
   call do_remap(twdth, halo, n0, n1, CS, h0, u0, h1, u1, cptime)
   print *,'u1 chksum =',chksum(twdth, halo, n1, u1)
-  print '(''PQM_IH6IH5 time taken: '',f8.3,'' secs'')', cptime
+  print '(''PQM_IH6IH5 time taken: '',3f8.3,'' secs'')', cptime
 
   contains
 
@@ -123,7 +123,7 @@ program test_remap_70lvl
     real, intent(in) :: u0(1-halo:twdth+halo,1-halo:twdth+halo,n0) !< Source data
     real, intent(in) :: h1(1-halo:twdth+halo,1-halo:twdth+halo,n1) !< Target grid
     real, intent(inout) :: u1(1-halo:twdth+halo,1-halo:twdth+halo,n1) !< Target data
-    real, intent(out) :: cputime !< CPU time used
+    real, intent(out) :: cputime(3) !< CPU time used
     ! Local variables
     integer :: i,j
     real :: cptim1, cptim2
@@ -162,11 +162,11 @@ program test_remap_70lvl
     real, intent(in) :: u0(n0,1-halo:twdth+halo,1-halo:twdth+halo) !< Source data
     real, intent(in) :: h1(n1,1-halo:twdth+halo,1-halo:twdth+halo) !< Target grid
     real, intent(inout) :: u1(n1,1-halo:twdth+halo,1-halo:twdth+halo) !< Target data
-    real, intent(out) :: cputime !< CPU time used
+    real, intent(out) :: cputime(3) !< CPU time used
     ! Local variables
     integer :: ni, nj
     integer :: i,j
-    real :: cptim1, cptim2
+    real :: cptim1, cptim2, cput(2)
 
     ! TODO: Pass with halos later...
     !   For now, don't deal with the 1-based to halo-based indexing issue
@@ -183,10 +183,9 @@ program test_remap_70lvl
     call remapping_core_h(CS, ni, nj, &
                           n0, h0(:,1:twdth,1:twdth), u0(:,1:twdth,1:twdth), &
                           n1, h1(:,1:twdth,1:twdth), u1(:,1:twdth,1:twdth), &
-                          h_neglect=1.e-30, h_neglect_edge=1.e-30)
+                          h_neglect=1.e-30, h_neglect_edge=1.e-30, cput=cputime)
     call cpu_time(cptim2)
-
-    cputime = cptim2 - cptim1
+    cputime(3) = cptim2 - cptim1
 
   end subroutine do_remap_t
 

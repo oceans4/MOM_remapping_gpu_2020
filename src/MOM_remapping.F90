@@ -185,7 +185,7 @@ function isPosSumErrSignificant(n1, sum1, n2, sum2)
 end function isPosSumErrSignificant
 
 !> Remaps column of values u0 on grid h0 to grid h1 assuming the top edge is aligned.
-subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
+subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge, cput)
   type(remapping_CS),      intent(in)    :: CS !< Remapping control structure
   integer,                 intent(in)    :: ni !< Number of cells in x
   integer,                 intent(in)    :: nj !< Number of cells in y
@@ -201,6 +201,7 @@ subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neg
   real, optional,          intent(in)    :: h_neglect_edge !< A negligibly small width
                                                !! for the purpose of edge value
                                                !! calculations in the same units as h0.
+  real, optional,          intent(out) :: cput(3) !< CPU times
   ! Local variables
   integer :: iMethod
   real, dimension(n0,2,ni,nj)           :: ppoly_r_E     ! Edge value of polynomial
@@ -210,10 +211,12 @@ subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neg
   real :: eps, h0tot, h0err, h1tot, h1err, u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, uh_err
   real :: hNeglect, hNeglect_edge
   real :: lh0(n0), lu0(n0), lh1(n1), lu1(n1), lE(n0,2), lS(n0,2), lC(n0,CS%degree+1)
+  real :: cptim1, cptim2
 
   hNeglect = 1.0e-30 ; if (present(h_neglect)) hNeglect = h_neglect
   hNeglect_edge = 1.0e-10 ; if (present(h_neglect_edge)) hNeglect_edge = h_neglect_edge
 
+  call cpu_time(cptim1)
   do j = 1, nj ; do i = 1, ni
     lh0(:) = h0(:,i,j)
     lu0(:) = u0(:,i,j)
@@ -229,9 +232,14 @@ subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neg
                                      CS%boundary_extrapolation, lC, lE, lS)
 #endif
   enddo ; enddo
+  call cpu_time(cptim2)
+  if (present(cput)) cput(1) = cptim2 - cptim1
 
+  call cpu_time(cptim1)
   call remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
                              CS%force_bounds_in_subcell, u1, uh_err)
+  call cpu_time(cptim2)
+  if (present(cput)) cput(2) = cptim2 - cptim1
 
 #ifndef _OPENACC
   do j = 1, nj ; do i = 1, ni
