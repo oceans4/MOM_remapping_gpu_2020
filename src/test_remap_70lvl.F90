@@ -168,21 +168,14 @@ program test_remap_70lvl
     integer :: i,j
     real :: cptim1, cptim2
 
-    ! TODO: Pass with halos later...
-    !   For now, don't deal with the 1-based to halo-based indexing issue
-    !ni = twdth + 2 * halo
-    !nj = twdth + 2 * halo
     ni = twdth
     nj = twdth
 
     ! Production version does not use "checks"
     call remapping_set_param(CS, check_reconstruction=.false., check_remapping=.false.)
 
-    ! TODO: Replace 1:twdth with : (or implicit) when halo size is passed
     call cpu_time(cptim1)
-    call remapping_core_h(CS, ni, nj, &
-                          n0, h0(:,1:twdth,1:twdth), u0(:,1:twdth,1:twdth), &
-                          n1, h1(:,1:twdth,1:twdth), u1(:,1:twdth,1:twdth), &
+    call remapping_core_h(CS, ni, nj, halo, n0, h0, u0, n1, h1, u1, &
                           h_neglect=1.e-30, h_neglect_edge=1.e-30)
     call cpu_time(cptim2)
 

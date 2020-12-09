@@ -185,16 +185,17 @@ function isPosSumErrSignificant(n1, sum1, n2, sum2)
 end function isPosSumErrSignificant
 
 !> Remaps column of values u0 on grid h0 to grid h1 assuming the top edge is aligned.
-subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
+subroutine remapping_core_h(CS, ni, nj, halo, n0, h0, u0, n1, h1, u1, h_neglect, h_neglect_edge)
   type(remapping_CS),      intent(in)    :: CS !< Remapping control structure
   integer,                 intent(in)    :: ni !< Number of cells in x
   integer,                 intent(in)    :: nj !< Number of cells in y
+  integer,                 intent(in)    :: halo !< Number of halo cells
   integer,                 intent(in)    :: n0 !< Number of cells on source grid
-  real, dimension(n0,ni,nj), intent(in)  :: h0 !< Cell widths on source grid
-  real, dimension(n0,ni,nj), intent(in)  :: u0 !< Cell averages on source grid
+  real, dimension(n0,1-halo:ni+halo,1-halo:nj+halo), intent(in)  :: h0 !< Cell widths on source grid
+  real, dimension(n0,1-halo:ni+halo,1-halo:nj+halo), intent(in)  :: u0 !< Cell averages on source grid
   integer,                 intent(in)    :: n1 !< Number of cells on target grid
-  real, dimension(n1,ni,nj), intent(in)  :: h1 !< Cell widths on target grid
-  real, dimension(n1,ni,nj), intent(out) :: u1 !< Cell averages on target grid
+  real, dimension(n1,1-halo:ni+halo,1-halo:nj+halo), intent(in)  :: h1 !< Cell widths on target grid
+  real, dimension(n1,1-halo:ni+halo,1-halo:nj+halo), intent(out) :: u1 !< Cell averages on target grid
   real, optional,          intent(in)    :: h_neglect !< A negligibly small width for the
                                                !! purpose of cell reconstructions
                                                !! in the same units as h0.
@@ -203,9 +204,9 @@ subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neg
                                                !! calculations in the same units as h0.
   ! Local variables
   integer :: iMethod
-  real, dimension(n0,2,ni,nj)           :: ppoly_r_E     ! Edge value of polynomial
-  real, dimension(n0,2,ni,nj)           :: ppoly_r_S     ! Edge slope of polynomial
-  real, dimension(n0,CS%degree+1,ni,nj) :: ppoly_r_coefs ! Coefficients of polynomial
+  real, dimension(n0,2,1-halo:ni+halo,1-halo:nj+halo) :: ppoly_r_E     ! Edge value of polynomial
+  real, dimension(n0,2,1-halo:ni+halo,1-halo:nj+halo) :: ppoly_r_S     ! Edge slope of polynomial
+  real, dimension(n0,CS%degree+1,1-halo:ni+halo,1-halo:nj+halo) :: ppoly_r_coefs ! Coefficients of polynomial
   integer :: i, j, k
   real :: eps, h0tot, h0err, h1tot, h1err, u0tot, u0err, u0min, u0max, u1tot, u1err, u1min, u1max, uh_err
   real :: hNeglect, hNeglect_edge
@@ -230,8 +231,11 @@ subroutine remapping_core_h(CS, ni, nj, n0, h0, u0, n1, h1, u1, h_neglect, h_neg
 #endif
   enddo ; enddo
 
-  call remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
-                             CS%force_bounds_in_subcell, u1, uh_err)
+  call remap_via_sub_cells(ni, nj, n0, h0(:,1:ni,1:nj), u0(:,1:ni,1:nj), &
+      ppoly_r_E(:,:,1:ni,1:nj), CS%degree+1, ppoly_r_coefs(:,:,1:ni,1:nj), &
+      n1, h1(:,1:ni,1:nj), iMethod, CS%force_bounds_in_subcell, &
+      u1(:,1:ni,1:nj), uh_err &
+  )
 
 #ifndef _OPENACC
   do j = 1, nj ; do i = 1, ni
