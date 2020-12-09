@@ -588,11 +588,15 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   logical :: tgt_has_volume !< True if h1 has not been consumed
   integer :: ij
 
-!$acc parallel loop 
-!!$acc private( &
-!!$acc   h_sub, uh_sub, u_sub, isub_src, isrc_start, isrc_end, isrc_max, &
-!!$acc   h0_eff, u0_min, u0_max, itgt_start, itgt_end &
-!!$acc )
+!$acc data copyin(u0_min(:,:), u0_max(:,:),  h0_eff(:,:), &
+!$acc h1(:,:), h_sub(:,:), h0(:,:), isrc_end(:,:), &
+!$acc isrc_max(:,:), isrc_start(:,:), isub_src(:,:), & 
+!$acc itgt_end(:,:), itgt_start(:,:), uh_sub(:,:), &
+!$acc u_sub(:,:), ppoly0_coefs(:,:,:), ppoly0_e(:,:,:), &
+!$acc u02_err, uh_err, u0) &
+!$acc copyout(u1(:,:)) 
+
+!$acc parallel loop collapse(2)
   do ij = 1, nij
     !i0_last_thick_cell = 0
     do i0 = 1, n0
@@ -602,8 +606,8 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
     enddo
   enddo
 !$acc end parallel
-print *,"first loop is executed"
-!$acc parallel loop private(h0_supply, h1_supply, i0_last_thick_cell)
+
+!$acc parallel loop vector_length(32) private(h0_supply, h1_supply, i0_last_thick_cell)
   do ij = 1, nij
     ! Initialize algorithm
     h0_supply = h0(1,ij)
@@ -623,6 +627,8 @@ print *,"first loop is executed"
     isrc_max(1,ij) = 1
     isub_src(1,ij) = 1
 
+!cant do a vector 
+!!$acc loop vector
     ! Loop over each sub-cell to calculate intersections with source and target grids
     do i_sub = 2, n0+n1+1
 
@@ -735,7 +741,6 @@ print *,"first loop is executed"
   enddo
 !$acc end parallel
 
-print *,"second loop is executed"
 !$acc parallel loop
   do ij = 1, nij
   ! Loop over each sub-cell to calculate average/integral values within each sub-cell.
@@ -744,6 +749,7 @@ print *,"second loop is executed"
   uh_sub(1,ij) = 0.
   u_sub(1,ij) = ppoly0_E(1,1,ij)
   u02_err = 0.
+!$acc loop vector
   do i_sub = 2, n0+n1
 
     ! Sub-cell thickness from loop above
@@ -831,11 +837,11 @@ print *,"second loop is executed"
  enddo
 !$acc end parallel
 
-!$acc parallel loop
+!$acc parallel loop 
  do ij = 1, nij
   ! Loop over each target cell summing the integrals from sub-cells within the target cell.
-  uh_err = 0.
   do i1 = 1, n1
+    uh_err = 0.
     if (h1(i1,ij) > 0.) then
       duh = 0. ; dh = 0.
       i_sub = itgt_start(i1,ij)
@@ -948,7 +954,7 @@ print *,"second loop is executed"
 
   enddo
 !$acc end parallel
-
+!$acc end data 
 end subroutine remap_via_sub_cells
 
 !> Returns the average value of a reconstruction within a single source cell, i0,
