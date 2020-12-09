@@ -786,7 +786,8 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
         write(0,*) 'a_c: ',(u0(i0,ij)-ppoly0_E(i0,1,ij))+(u0(i0,ij)-ppoly0_E(i0,2,ij))
         write(0,*) 'Polynomial coeffs: ',ppoly0_coefs(i0,:,ij)
         write(0,*) 'Bounds min=',u0_min(i0,ij),'max=',u0_max(i0,ij)
-        write(0,*) 'Average: ',u_sub(i_sub,ij),'rel to min=',u_sub(i_sub,ij)-u0_min(i0,ij),'rel to max=',u_sub(i_sub,ij)-u0_max(i0,ij)
+        write(0,*) 'Average: ',u_sub(i_sub,ij),'rel to min=',u_sub(i_sub,ij)-u0_min(i0,ij), &
+                              'rel to max=',u_sub(i_sub,ij)-u0_max(i0,ij)
         call MOM_error( FATAL, 'MOM_remapping, remap_via_sub_cells: '//&
              'Sub-cell average is out of bounds!' )
       endif
