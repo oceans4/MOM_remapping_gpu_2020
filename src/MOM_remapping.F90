@@ -615,11 +615,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   enddo
 !$acc end parallel
 
-<<<<<<< HEAD
 !$acc parallel loop vector_length(32) private(h0_supply, h1_supply, i0_last_thick_cell)
-=======
-!$acc parallel loop private(h0_supply, h1_supply, i0_last_thick_cell)
->>>>>>> b30542ffd2ba93cb4d11c6cf0fd00b3917c1fc1d
   do ij = 1, nij
     ! Initialize algorithm
     h0_supply = h0(1,ij)
@@ -968,6 +964,7 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   enddo
 !$acc end parallel
 !$acc end data 
+
 end subroutine remap_via_sub_cells
 
 !> Returns the average value of a reconstruction within a single source cell, i0,
