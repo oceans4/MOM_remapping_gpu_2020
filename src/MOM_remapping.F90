@@ -231,11 +231,8 @@ subroutine remapping_core_h(CS, ni, nj, halo, n0, h0, u0, n1, h1, u1, h_neglect,
 #endif
   enddo ; enddo
 
-  call remap_via_sub_cells(ni, nj, n0, h0(:,1:ni,1:nj), u0(:,1:ni,1:nj), &
-      ppoly_r_E(:,:,1:ni,1:nj), CS%degree+1, ppoly_r_coefs(:,:,1:ni,1:nj), &
-      n1, h1(:,1:ni,1:nj), iMethod, CS%force_bounds_in_subcell, &
-      u1(:,1:ni,1:nj), uh_err &
-  )
+  call remap_via_sub_cells(ni, nj, halo, n0, h0, u0, ppoly_r_E, CS%degree+1, &
+      ppoly_r_coefs, n1, h1, iMethod, CS%force_bounds_in_subcell, u1, uh_err)
 
 #ifndef _OPENACC
   do j = 1, nj ; do i = 1, ni
@@ -284,10 +281,11 @@ end subroutine remapping_core_h
 #ifndef _OPENACC
 !> Remaps column of values u0 on grid h0 to implied grid h1
 !! where the interfaces of h1 differ from those of h0 by dx.
-subroutine remapping_core_w(CS, ni, nj, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_edge )
+subroutine remapping_core_w(CS, ni, nj, halo, n0, h0, u0, n1, dx, u1, h_neglect, h_neglect_edge )
   type(remapping_CS),  intent(in)  :: CS !< Remapping control structure
   integer,             intent(in)  :: ni !< Number of cells x
   integer,             intent(in)  :: nj !< Number of cells y
+  integer,             intent(in)  :: halo !< Number of halo cells
   integer,             intent(in)  :: n0 !< Number of cells on source grid
   real, dimension(n0), intent(in)  :: h0 !< Cell widths on source grid
   real, dimension(n0), intent(in)  :: u0 !< Cell averages on source grid
@@ -330,8 +328,8 @@ subroutine remapping_core_w(CS, ni, nj, n0, h0, u0, n1, dx, u1, h_neglect, h_neg
       h1(k) = max( 0., dx(k+1) - dx(k) )
     endif
   enddo
-  call remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
-                            CS%force_bounds_in_subcell,u1, uh_err )
+  call remap_via_sub_cells(ni, nj, halo, n0, h0, u0, ppoly_r_E, CS%degree+1, ppoly_r_coefs, n1, h1, iMethod, &
+                           CS%force_bounds_in_subcell,u1, uh_err )
 ! call remapByDeltaZ( n0, h0, u0, ppoly_r_E, ppoly_r_coefs, n1, dx, iMethod, u1, hNeglect )
 ! call remapByProjection( n0, h0, u0, CS%ppoly_r, n1, h1, iMethod, u1, hNeglect )
 
@@ -545,21 +543,22 @@ end subroutine check_reconstructions_1d
 !> Remaps column of n0 values u0 on grid h0 to grid h1 with n1 cells by calculating
 !! the n0+n1+1 sub-integrals of the intersection of h0 and h1, and the summing the
 !! appropriate integrals into the h1*u1 values.  h0 and h1 must have the same units.
-subroutine remap_via_sub_cells(ni, nj, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, h1, method, &
+subroutine remap_via_sub_cells(ni, nj, halo, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, h1, method, &
                                force_bounds_in_subcell, u1, uh_err)
   integer,           intent(in)    :: ni     !< Number of cells in x
   integer,           intent(in)    :: nj     !< Number of cells in y
+  integer,           intent(in)    :: halo   !< Number of halo cells
   integer,           intent(in)    :: n0     !< Number of cells in source grid
-  real,              intent(in)    :: h0(n0,ni,nj)  !< Source grid widths (size n0)
-  real,              intent(in)    :: u0(n0,ni,nj)  !< Source cell averages (size n0)
-  real,              intent(in)    :: ppoly0_E(n0,2,ni,nj)            !< Edge value of polynomial
+  real,              intent(in)    :: h0(n0,1-halo:ni+halo,1-halo:nj+halo)  !< Source grid widths (size n0)
+  real,              intent(in)    :: u0(n0,1-halo:ni+halo,1-halo:nj+halo)  !< Source cell averages (size n0)
+  real,              intent(in)    :: ppoly0_E(n0,2,1-halo:ni+halo,1-halo:nj+halo)            !< Edge value of polynomial
   integer,           intent(in)    :: np     !< Degree + 1 of polynomial
-  real,              intent(in)    :: ppoly0_coefs(n0,np,ni,nj) !< Coefficients of polynomial
+  real,              intent(in)    :: ppoly0_coefs(n0,np,1-halo:ni+halo,1-halo:nj+halo) !< Coefficients of polynomial
   integer,           intent(in)    :: n1     !< Number of cells in target grid
-  real,              intent(in)    :: h1(n1,ni,nj)  !< Target grid widths (size n1)
+  real,              intent(in)    :: h1(n1,1-halo:ni+halo,1-halo:nj+halo)  !< Target grid widths (size n1)
   integer,           intent(in)    :: method !< Remapping scheme to use
   logical,           intent(in)    :: force_bounds_in_subcell !< Force sub-cell values to be bounded
-  real,              intent(out)   :: u1(n1,ni,nj)  !< Target cell averages (size n1)
+  real,              intent(out)   :: u1(n1,1-halo:ni+halo,1-halo:nj+halo)  !< Target cell averages (size n1)
   real,              intent(out)   :: uh_err !< Estimate of bound on error in sum of u*h
   ! Local variables
   integer :: i, j  ! Index loops
@@ -1648,7 +1647,7 @@ end subroutine end_remapping
 logical function remapping_unit_tests(verbose)
   logical, intent(in) :: verbose !< If true, write results to stdout
   ! Local variables
-  integer, parameter :: ni = 1, nj = 1
+  integer, parameter :: ni = 1, nj = 1, halo = 0
   integer, parameter :: n0 = 4, n1 = 3, n2 = 6
   real :: h0(n0), x0(n0+1), u0(n0)
   real :: h1(n1), x1(n1+1), u1(n1), hn1(n1), dx1(n1+1)
@@ -1696,7 +1695,7 @@ logical function remapping_unit_tests(verbose)
 
 #ifndef _OPENACC
   call dzFromH1H2( n0, h0, n1, h1, dx1 )
-  call remapping_core_w(CS, ni, nj, n0, h0, u0, n1, dx1, u1, h_neglect, h_neglect_edge)
+  call remapping_core_w(CS, ni, nj, halo, n0, h0, u0, n1, dx1, u1, h_neglect, h_neglect_edge)
   do i=1,n1
     err=u1(i)-8.*(0.5*real(1+n1)-real(i))
     if (abs(err)>real(n1-1)*epsilon(err)) thisTest = .true.
@@ -1763,7 +1762,7 @@ logical function remapping_unit_tests(verbose)
 
   if (verbose) write(*,*) 'Via sub-cells'
   thisTest = .false.
-  call remap_via_sub_cells(ni, nj, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+  call remap_via_sub_cells(ni, nj, halo, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
                             n2, h2, INTEGRATION_PPM, .false., u2, err )
   if (verbose) call dumpGrid(n2,h2,x2,u2)
 
@@ -1774,11 +1773,11 @@ logical function remapping_unit_tests(verbose)
   if (thisTest) write(*,*) 'remapping_unit_tests: Failed remap_via_sub_cells() 2'
   remapping_unit_tests = remapping_unit_tests .or. thisTest
 
-  call remap_via_sub_cells(ni, nj, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+  call remap_via_sub_cells(ni, nj, halo, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
                             6, (/.125,.125,.125,.125,.125,.125/), INTEGRATION_PPM, .false., u2, err )
   if (verbose) call dumpGrid(6,h2,x2,u2)
 
-  call remap_via_sub_cells(ni, nj, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
+  call remap_via_sub_cells(ni, nj, halo, n0, h0, u0, edges, CS%degree+1, poly_cfs, &
                             3, (/2.25,1.5,1./), INTEGRATION_PPM, .false., u2, err )
   if (verbose) call dumpGrid(3,h2,x2,u2)
 
@@ -1942,7 +1941,7 @@ logical function remapping_unit_tests(verbose)
     test_answer(v, 4, edges(1:4,1), (/5.,5.,3.,1./), 'PPM: left edges h=0110')
   remapping_unit_tests = remapping_unit_tests .or. &
     test_answer(v, 4, edges(1:4,2), (/5.,3.,1.,1./), 'PPM: right edges h=0110')
-  call remap_via_sub_cells(1, 1, 4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), edges(1:4,:), &
+  call remap_via_sub_cells(1, 1, 0, 4, (/0.,1.,1.,0./), (/5.,4.,2.,1./), edges(1:4,:), &
                             size(poly_cfs,2)+1, poly_cfs(1:4,:), &
                             2, (/1.,1./), INTEGRATION_PLM, .false., u2, err )
   remapping_unit_tests = remapping_unit_tests .or. &
