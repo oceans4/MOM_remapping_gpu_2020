@@ -596,13 +596,11 @@ subroutine remap_via_sub_cells(nij, n0, h0, u0, ppoly0_E, np, ppoly0_coefs, n1, 
   logical :: tgt_has_volume !< True if h1 has not been consumed
   integer :: ij
 
-!$acc data copyin(u0_min(:,:), u0_max(:,:),  h0_eff(:,:), &
-!$acc h1(:,:), h_sub(:,:), h0(:,:), isrc_end(:,:), &
-!$acc isrc_max(:,:), isrc_start(:,:), isub_src(:,:), & 
-!$acc itgt_end(:,:), itgt_start(:,:), uh_sub(:,:), &
-!$acc u_sub(:,:), ppoly0_coefs(:,:,:), ppoly0_e(:,:,:), &
-!$acc u02_err, uh_err, u0) &
-!$acc copyout(u1(:,:)) 
+!$acc data &
+!$acc copyin( u0, h0, h1, ppoly0_coefs, ppoly0_e ) &
+!$acc create( u0_min, u0_max, h0_eff, h_sub, u_sub, uh_sub, u02_err, uh_err, &
+!$acc         isrc_max, isrc_start, isrc_end, isub_src, itgt_end, itgt_start ) &
+!$acc copyout( u1 )
 
 !$acc parallel loop collapse(2)
   do ij = 1, nij
